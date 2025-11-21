@@ -267,6 +267,66 @@ class OBDECOCHead(nn.Module):
             self.transformer.labels(raw_output),
         )
 
+
+# ======================
+# Baseline Models
+# ====================== 
+class MLP(nn.Module):
+    def __init__(self, x_dim, h_dims=[128, 64], rep_dim=32):
+        # super(MLP, self).__init__()
+        # CHANGE:
+        super().__init__()
+        self.output_dim = rep_dim
+
+        self.hidden = FlexibleMLP(x_dim, h_dims)
+        self.clf_head = nn.Linear(h_dims[-1], rep_dim)
+    
+    def forward(self, x):
+        x = self.hidden(x)
+        return self.clf_head(x)
+        
+        
+class ImageNet(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.resnet = models.resnet18(weights="IMAGENET1K_V1")
+        self.resnet.fc = nn.Identity()  # 移除 fc（變成空操作）
+        self.encoded_dim = self.resnet.layer4[1].conv2.out_channels  # ResNet layer4 的輸出通道數
+
+        self.clf_head = nn.Linear(self.encoded_dim, num_classes, bias=True)
+
+    def forward(self, x):
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+
+        x = self.resnet.layer1(x)
+        x = self.resnet.layer2(x)
+        x = self.resnet.layer3(x)
+        x = self.resnet.layer4(x)  # 這裡是 backbone 的輸出
+
+        x = self.resnet.avgpool(x)
+        x = torch.flatten(x, 1)
+
+        clf_out = self.clf_head(x)
+        return clf_out
+
+class TabularNet(nn.Module):
+    def __init__(self, num_classes, input_dim, enc_dims=[64, 32]):
+        super().__init__()
+        self.encoder = FlexibleMLP(input_dim, enc_dims)
+        
+        self.encoded_dim = enc_dims[-1]
+        self.clf_head = nn.Linear(self.encoded_dim, num_classes, bias=True)
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        clf_out = self.clf_head(encoded)
+        return clf_out
+    
+    
+    
 # ======================
 #  Example Usage
 # ======================

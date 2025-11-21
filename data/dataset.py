@@ -15,7 +15,7 @@ def load_image_dataset(dataset_name, seed):
         raise ValueError(f"Unsupported dataset: {dataset_name}")
 
 def get_fgnet_dataset(seed):
-    
+    print("Loading FGNet dataset...")
     set_seed(seed)
 
     # Download the FGNet dataset
@@ -60,7 +60,7 @@ def get_fgnet_dataset(seed):
     
     
 def get_adience_dataset(seed):
-   
+    print("Loading Adience dataset...")
     set_seed(seed)
 
     adience_train = Adience(
