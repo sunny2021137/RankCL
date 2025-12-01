@@ -1,7 +1,7 @@
 from torch import nn
-from dlordinal.output_layers import CLM
-from dlordinal.output_layers import StickBreakingLayer
-from .model import (BaseTabular, DualHeadTabular, BaseImage, DualHeadImage, OBDECOCHead, TabularNet, ImageNet)
+from dlordinal.output_layers import CLM, StickBreakingLayer
+from dlordinal.wrappers import OBDECOCModel
+from .model import (BaseTabular, DualHeadTabular, BaseImage, DualHeadImage, OBDECOCHead, PretrainRCMImage, PretrainRCMTabular, TabularNet, ImageNet)
 from dlordinal.losses import (
     BetaCrossEntropyLoss,
     TriangularCrossEntropyLoss,
@@ -12,12 +12,21 @@ from dlordinal.losses import (
 from dlordinal_change.softlabeling import (
     BinomialCrossEntropyLoss,
 )
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from Ordinal_Classifier import Ordinal_Classifier as OC
+from mord import LogisticAT  # Logistic model with All-Thresholds (CLM)
 
 
-def get_optuna_params(deep_ordinal_method, trial):
-    if deep_ordinal_method=="LinearLayer":
+
+def get_optuna_params(base_method_name, use_rankcl, trial):
+    if base_method_name=="LinearLayer":
         params = {}
-    elif deep_ordinal_method=="SoftLabel":
+    elif base_method_name=="SoftLabel":
         distribution = trial.suggest_categorical("distribution", ["triangular", "beta", "binomial", "exponential"])
         if distribution == "triangular":
             params = {
@@ -41,35 +50,42 @@ def get_optuna_params(deep_ordinal_method, trial):
                 "eta": trial.suggest_categorical("eta", [0.8, 1.0]),
                 "p": trial.suggest_categorical("p", [1.0, 1.5, 2.0]),
             }
-    elif deep_ordinal_method=="StickBreaking":
+    elif base_method_name=="StickBreaking":
         params = {}
         
-    elif deep_ordinal_method=="OBDECOC":
+    elif base_method_name=="OBDECOC":
         params = {}
 
-    elif deep_ordinal_method=="DeepCLM":
+    elif base_method_name=="DeepCLM":
         params = {
             "link_function": trial.suggest_categorical("link_function", ['logit','probit', 'cloglog']),
         }
-    elif deep_ordinal_method=="DeepCLMWK":
+    elif base_method_name=="DeepCLMWK":
         params = {
             "link_function": trial.suggest_categorical("link_function", ['logit','probit', 'cloglog']),
         }
-    elif deep_ordinal_method == "CLOC":
+    elif base_method_name == "CLOC":
         params = {}
     else:
         raise ValueError("Invalid method name.")
     
     # 共同參數
     params["lr"] = trial.suggest_categorical("lr", [1e-2, 1e-3, 1e-4])
-    params["lambda"] = trial.suggest_categorical("lambda", [0.001, 0.01, 0.1, 1, 10, 100, 1000])
+    
+    if use_rankcl:
+        params["lambda"] = trial.suggest_categorical("lambda", [0.001, 0.01, 0.1, 1, 10, 100, 1000])
+    else:
+        print("No lambda tuning.")
 
     return params
 
 def get_model_loss(num_classes, input_dim, config):
-    deep_ordinal_method = config["deep_ordinal_method"]
+    base_method_name = config["base_method_name"]
     dataset_type = config["dataset"]["dataset_type"]
-    model_params = config["model"].get("model_params", {})
+    if config.get("model") is None:
+        model_params = {}
+    else:
+        model_params = config["model"].get("model_params", {})
     search_params = config.get("search_params", {})
     
     if config.get('use_reweight', False):
@@ -79,31 +95,31 @@ def get_model_loss(num_classes, input_dim, config):
         print("Not using reweighting")
         class_weights = None
     
-    if deep_ordinal_method == "LinearLayer":
+    if base_method_name == "LinearLayer":
         prediction_head_name = "Softmax"
         loss_fn_name="cross_entropy"
         
-    elif deep_ordinal_method == "SoftLabel":
+    elif base_method_name == "SoftLabel":
         prediction_head_name = "Softmax"
         loss_fn_name=search_params["distribution"]
     
-    elif deep_ordinal_method == "StickBreaking":
+    elif base_method_name == "StickBreaking":
         prediction_head_name = "StickBreaking"
         loss_fn_name="cross_entropy"
     
-    elif deep_ordinal_method == "OBDECOC":
+    elif base_method_name == "OBDECOC":
         prediction_head_name = "OBDECOC"
         loss_fn_name="ordinal_ecoc"
  
-    elif deep_ordinal_method == "DeepCLM":
+    elif base_method_name == "DeepCLM":
         prediction_head_name = "CLM"
         loss_fn_name="cross_entropy"
         
-    elif deep_ordinal_method == "DeepCLMWK":
+    elif base_method_name == "DeepCLMWK":
         prediction_head_name = "CLM"
         loss_fn_name="wkloss"
     
-    elif deep_ordinal_method == "CLOC":
+    elif base_method_name == "CLOC":
         prediction_head_name = "CE_2layer"
         loss_fn_name="cross_entropy"
         
@@ -112,15 +128,14 @@ def get_model_loss(num_classes, input_dim, config):
     
     # NOTE: 預設使用 RankCL 架構
     use_rankcl = config.get("use_rankcl", True)
-    method_type = config.get("method_type", None)
     
-    model = get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, prediction_head_name, model_params, search_params)
+    model = get_model(dataset_type, use_rankcl, num_classes, input_dim, prediction_head_name, model_params, search_params)
     loss_fn = get_loss_fn(num_classes, loss_fn_name, search_params, class_weights)
     
     return model, loss_fn
     
 
-def get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, prediction_head_name, model_params, search_params):
+def get_model(dataset_type, use_rankcl, num_classes, input_dim, prediction_head_name, model_params, search_params):
     if use_rankcl:
         if dataset_type == "tabular":
             if prediction_head_name == "OBDECOC":
@@ -137,7 +152,7 @@ def get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, pre
                 print("DualHeadImage")
                 model = DualHeadImage(num_classes, **model_params)
                 
-    elif method_type == 'deep':
+    else:
         if dataset_type == "tabular":
             print("TabularNet")
             model = TabularNet(num_classes, input_dim, **model_params)
@@ -148,8 +163,6 @@ def get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, pre
         if prediction_head_name == "OBDECOC":
             print("clf identity")
             model.clf_head = nn.Identity()
-    else:
-        raise ValueError("Invalid method type.")
 
     encoded_dim = model.encoded_dim
     
@@ -164,8 +177,10 @@ def get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, pre
         model.clf_head = nn.Sequential(nn.Linear(encoded_dim, 1, bias=has_bias), clm)
     
     elif prediction_head_name == "OBDECOC":
-        model = OBDECOCHead(num_classes=num_classes, base_classifier=model, base_n_outputs=encoded_dim)
-    
+        if use_rankcl:
+            model = OBDECOCHead(num_classes=num_classes, base_classifier=model, base_n_outputs=encoded_dim)
+        else:
+            model = OBDECOCModel(num_classes=num_classes, base_classifier=model, base_n_outputs=encoded_dim)
     elif prediction_head_name == "CE_2layer":
         model.clf_head = nn.Sequential(
             nn.Linear(encoded_dim, encoded_dim//2),
@@ -178,59 +193,11 @@ def get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, pre
     
     return model
 
-# def get_model(dataset_type, use_rankcl, method_type, num_classes, input_dim, prediction_head_name, model_params, search_params):
-#     if use_rankcl:
-#         return get_model_rankcl(dataset_type, num_classes, input_dim, prediction_head_name, model_params, search_params)
-#     elif method_type == 'deep':
-#         return get_model_deep(dataset_type, num_classes, input_dim, prediction_head_name, model_params, search_params)
-#     else:
-#         raise ValueError("Invalid method type.")
-     
-# def get_model_rankcl(dataset_type, num_classes, input_dim, prediction_head_name, model_params, search_params):
-    
-#     if dataset_type == "tabular":
-#         if prediction_head_name == "OBDECOC":
-#             base = BaseTabular(input_dim=input_dim, **model_params)
-#             encoded_dim = base.encoded_dim
-#         else:
-#             model = DualHeadTabular(num_classes, input_dim, **model_params)
-#             encoded_dim = model.encoded_dim
-#     else:
-#         if prediction_head_name == "OBDECOC":
-#             base = BaseImage(**model_params)
-#             encoded_dim = base.encoded_dim
-#         else:
-#             model = DualHeadImage(num_classes, **model_params)
-#             encoded_dim = model.encoded_dim
-
-#     if prediction_head_name == "Softmax":
-#         pass
-#     elif prediction_head_name == "StickBreaking":
-#         model.clf_head = StickBreakingLayer(encoded_dim, num_classes)
-        
-#     elif prediction_head_name == "CLM":
-#         clm = CLM(num_classes, link_function=search_params["link_function"])
-#         has_bias = model.clf_head.bias is not None
-#         model.clf_head = nn.Sequential(nn.Linear(encoded_dim, 1, bias=has_bias), clm)
-    
-#     elif prediction_head_name == "OBDECOC":
-#         model = OBDECOCHead(num_classes=num_classes, base_classifier=base, base_n_outputs=encoded_dim)
-    
-#     elif prediction_head_name == "CE_2layer":
-#         model.clf_head = nn.Sequential(
-#             nn.Linear(encoded_dim, encoded_dim//2),
-#             nn.ReLU(),
-#             nn.Linear(encoded_dim//2, num_classes)
-#         )
-    
-#     else:
-#         raise ValueError("Invalid output layer name.")
-    
-#     return model
-
 
 def get_loss_fn(num_classes, loss_fn_name, search_params, class_weights):
-    
+    if class_weights is not None:
+        print(f"Class weights: {class_weights}")
+        
     if loss_fn_name == "cross_entropy":
         return nn.CrossEntropyLoss(weight=class_weights)
     
@@ -256,8 +223,8 @@ def get_loss_fn(num_classes, loss_fn_name, search_params, class_weights):
         raise ValueError("Invalid loss function name.")
     
 
-def get_optuna_params_ml(method_name, trial):
-    if method_name == "decision_tree":
+def get_optuna_params_ml(base_method_name, trial):
+    if base_method_name == "Decision Tree":
         params = {
             "max_depth": trial.suggest_int("max_depth", 3, 20),
             "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
@@ -265,7 +232,7 @@ def get_optuna_params_ml(method_name, trial):
             "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
         }
 
-    elif method_name == "random_forest":
+    elif base_method_name == "Random Forest":
         params = {
             "n_estimators": trial.suggest_int("n_estimators", 100, 300),
             "max_depth": trial.suggest_int("max_depth", 5, 20),
@@ -273,47 +240,28 @@ def get_optuna_params_ml(method_name, trial):
             "max_features": trial.suggest_categorical("max_features", ["sqrt", "log2"]),
         }
 
-    elif method_name == "xgboost":
+    elif base_method_name == "XGBoost":
         params = {
             "tree_method": "hist",
-            "device": "cuda",
             "max_depth": trial.suggest_int("max_depth", 3, 12),
             "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.3, log=True),
             "subsample": trial.suggest_float("subsample", 0.6, 1.0),
         }
-
-    elif method_name == "gradient_boosting":
-        params = {
-            "n_estimators": trial.suggest_int("n_estimators", 100, 300),
-            "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.3, log=True),
-            "max_depth": trial.suggest_int("max_depth", 3, 10),
-            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-        }
-
-    elif method_name == "lightgbm":
+    elif base_method_name == "LightGBM":
         params = {
             "num_leaves": trial.suggest_int("num_leaves", 16, 128),
             "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.3, log=True),
             "feature_fraction": trial.suggest_float("feature_fraction", 0.6, 1.0),
         }
 
-    elif method_name == "catboost":
-        params = {
-            "task_type": "GPU",
-            "iterations": trial.suggest_int("iterations", 100, 300),
-            "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.3, log=True),
-            "depth": trial.suggest_int("depth", 3, 10),
-            "verbose": 0,
-        }
-
-    elif method_name == "MLP":
+    elif base_method_name == "MLP":
         params = {
             "hidden_layer_sizes": (128, 64),
             "activation": trial.suggest_categorical("activation", ["relu", "tanh"]),
             "alpha": trial.suggest_float("alpha", 1e-5, 1e-2, log=True),
             "learning_rate_init": trial.suggest_float("learning_rate_init", 1e-4, 1e-2, log=True),
         }
-    elif method_name == "logistic_regression":
+    elif base_method_name == "Logistic Regression":
         params = {
             "C": trial.suggest_float("C", 1e-3, 1e2, log=True),  
             "solver": "lbfgs",  
@@ -322,7 +270,7 @@ def get_optuna_params_ml(method_name, trial):
             "penalty": "l2",  
         }
         
-    elif method_name == "ordinal_classfier":
+    elif base_method_name == "Ordinal Tree":
         clf_name = trial.suggest_categorical("clf", ["decision_tree", "random_forest"])
         
         if clf_name == "decision_tree":
@@ -342,44 +290,33 @@ def get_optuna_params_ml(method_name, trial):
             
         params["clf"] = clf_name    
         
-    elif method_name == "CLM":
-        params = {
-            "alpha": trial.suggest_float("alpha", 1e-3, 100, log=True)
-        }
-    
-    elif method_name == "OrdinalRidge":
+    elif base_method_name == "CLM":
         params = {
             "alpha": trial.suggest_float("alpha", 1e-3, 100, log=True)
         }
     
     return params 
 
-def get_model_ml(method_name, params):
-    if method_name == "decision_tree":
+def get_model_ml(base_method_name, params):
+    if base_method_name == "Decision Tree":
         model = DecisionTreeClassifier(**params)
 
-    elif method_name == "random_forest":
+    elif base_method_name == "Random Forest":
         model = RandomForestClassifier(**params)
 
-    elif method_name == "xgboost":
+    elif base_method_name == "XGBoost":
         model = XGBClassifier(**params, eval_metric="logloss")
 
-    elif method_name == "gradient_boosting":
-        model = GradientBoostingClassifier(**params)
-
-    elif method_name == "lightgbm":
+    elif base_method_name == "LightGBM":
         model = LGBMClassifier(**params)
-
-    elif method_name == "catboost":
-        model = CatBoostClassifier(**params)
-
-    elif method_name == "MLP":
+        
+    elif base_method_name == "MLP":
         model = MLPClassifier(max_iter=400, **params)
         
-    elif method_name == "logistic_regression":
+    elif base_method_name == "Logistic Regression":
         model = LogisticRegression(**params)
         
-    elif method_name == "ordinal_classfier":
+    elif base_method_name == "Ordinal Tree":
         if params["clf"] == "decision_tree":
             model_params = {k: v for k, v in params.items() if k != "clf"}
             clf = DecisionTreeClassifier(**model_params)
@@ -388,10 +325,27 @@ def get_model_ml(method_name, params):
             clf = RandomForestClassifier(**model_params)
         model = OC.OrdinalClassifier(clf)
         
-    elif method_name == "CLM":
+    elif base_method_name == "CLM":
         model = LogisticAT(**params)
     
-    elif method_name == "OrdinalRidge":
-        model = OrdinalRidge(**params)
     return model
     
+def get_pretrain_model(input_dim, config):
+    dataset_type = config["dataset"]["dataset_type"]
+    if config.get("model") is None:
+        model_params = {}
+    else:
+        model_params = config["model"].get("model_params", {})
+        
+    if dataset_type == "tabular":
+        model = PretrainRCMTabular(input_dim, **model_params)
+    else:
+        model = PretrainRCMImage(**model_params) 
+    
+    return model
+
+
+def get_pretrain_optuna_params(trial):
+    params = {}
+    params["pretrain_lr"] = trial.suggest_categorical("pretrain_lr", [1e-2, 1e-3, 1e-4])
+    return params

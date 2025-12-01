@@ -1,17 +1,55 @@
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+from src.eval import evaluate_metrics
+from src.factory import get_model_ml
 import argparse
-from train.trainer import RankCLTrainer
 from src.utils import make_distributions, print_label_distribution, set_seed, load_yaml
-from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 import numpy as np
 import pandas as pd
-from data.data_loader import data_loader, load_tabular_dataset, Sampler
+from data.data_loader import load_tabular_dataset
 import torch
 from data.dataset import load_image_dataset
 import gc
+import torchvision.models as models
+import torch.nn as nn
+from sklearn.metrics import confusion_matrix
+from torch.utils.data import DataLoader, TensorDataset
 
-def run_tabular(base_cfg):
+def get_pretrained_res18():
+    res = models.resnet18(weights="IMAGENET1K_V1")
+    res.fc = nn.Identity() # 去除最後分類層
+    return res
+
+# def get_features(model, input_data):
+#     device = "cuda" if torch.cuda.is_available() else "cpu"
+#     model = model.to(device)
+    
+#     model.eval()
+#     with torch.no_grad():
+#         img_tensor = torch.from_numpy(input_data)
+#         img_tensor = img_tensor.to(device)  # device = "cuda" or "cpu"
+#         feature = model(img_tensor).squeeze().cpu().numpy()  # [512]
+     
+#     return feature
+
+def get_features(model, data_np, batch_size=64):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = model.to(device)
+    model.eval()
+    features = []
+    dataset = TensorDataset(torch.from_numpy(data_np))
+    loader = DataLoader(dataset, batch_size=batch_size)
+    
+    with torch.no_grad():
+        for batch in loader:
+            batch_x = batch[0].to(device)
+            output = model(batch_x).squeeze()
+            features.append(output.cpu())
+    
+    return torch.cat(features).numpy()
+
+def run_tabular_baseline_none_deep(base_cfg):
     dataset_name = base_cfg["dataset"]["dataset_name"]
     
     X_all, y_all = load_tabular_dataset(dataset_name)
@@ -57,34 +95,25 @@ def run_tabular(base_cfg):
         X_train_full, X_test = X_all[train_idx_outer], X_all[test_idx_outer]
         y_train_full, y_test = y_all[train_idx_outer], y_all[test_idx_outer]
         
-        
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train_full, y_train_full, test_size=base_cfg["train"]["val_ratio"], stratify=y_train_full, random_state=seed
-        )
-        X_train_run = X_train.astype(np.float32)
-        X_val_run = X_val.astype(np.float32)
+        X_train_run = X_train_full.astype(np.float32)
         X_test_run = X_test.astype(np.float32)
-
-        # 調整 batch size 為類別數的倍數，以符合 RankCL balanced dataloader的需求
-        config["train"]["batch_size"] = (config["train"]["batch_size"] // n_classes) * n_classes
-        val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
-        test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-
-        x_dim = X_train_run.shape[1]
         
-        trainer = RankCLTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
-        # train
-        trainer.train()
-        # test
-        result = trainer.test()
-                
-        cm_norm_sum += result['confusion_matrix']
-        del result['confusion_matrix']
-        results.append(result)
-        run += 1
+        # NOTE:
+        if config["use_reweight"] == True:
+            # not implemented for none-deep models
+            raise NotImplementedError("Reweighting not implemented for none-deep models.")
 
+        model = get_model_ml(config["base_method_name"], config["search_params"]) 
+        model.fit(X_train_run, y_train_full)
+        y_pred = model.predict(X_test_run)
+        result = evaluate_metrics(y_test, y_pred, n_classes)
+        results.append(result)
+        
+        cm = confusion_matrix(y_test, y_pred, labels=range(0, n_classes))
+        cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+        cm_norm_sum += cm_norm
+        
+        run += 1
 
     cm_norm_avg = cm_norm_sum / config["train"]["n_runs"]
     cm = np.array(cm_norm_avg)  # 轉成純 numpy array
@@ -100,8 +129,7 @@ def run_tabular(base_cfg):
     result_df.to_csv(f"{out_dir}/metrics.csv", index=False)  # index=False 避免存入行索引
     print(f"CSV 檔案已存成 {out_dir}/metrics.csv")
 
-def run_image(base_cfg):
-    torch.set_num_threads(8)
+def run_image_baseline_none_deep(base_cfg):
     
     dataset_name = base_cfg["dataset"]["dataset_name"]
     seed = base_cfg["seed"]
@@ -120,41 +148,35 @@ def run_image(base_cfg):
     
     # 合併設定（base 為底，hyper 覆蓋）
     config = base_cfg | hyper_cfg
-    config["train"]["batch_size"] = (config["train"]["batch_size"] // n_classes) * n_classes
-   
+    
     results = []
     cm_norm_sum = 0
     for run in range(config["train"]["n_runs"]):
         seed = config['seed'] + run
         set_seed(seed)
-        
-        # 切validation set
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train_full, y_train_full, test_size=config["train"]["val_ratio"], stratify=y_train_full, random_state=seed
-        )
                 
         # 固定精度
-        X_train_run = X_train.astype(np.float32)
-        X_val_run = X_val.astype(np.float32)
+        X_train_run = X_train_full.astype(np.float32)
         X_test_run = X_test.astype(np.float32)
                     
+        if config["use_reweight"] == True:
+            # not implemented for none-deep models
+            raise NotImplementedError("Reweighting not implemented for none-deep models.")
+                    
+        res = get_pretrained_res18()
+        feature_train = get_features(res, X_train_run)
+        feature_test = get_features(res, X_test_run)
         
-        val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
-        test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-       
-        x_dim = X_train_run.shape[1] 
+        model = get_model_ml(config["base_method_name"], config["search_params"])    
+        model.fit(feature_train, y_train_full)
+        y_pred = model.predict(feature_test)
         
-        trainer = RankCLTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
-        # train
-        trainer.train()
-        # test
-        result = trainer.test()
-        
-        cm_norm_sum += result['confusion_matrix']
-        del result['confusion_matrix']
+        result = evaluate_metrics(y_test, y_pred, n_classes)
         results.append(result)
+        
+        cm = confusion_matrix(y_test, y_pred, labels=range(0, n_classes))
+        cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+        cm_norm_sum += cm_norm
         
     cm_norm_avg = cm_norm_sum / config["train"]["n_runs"]
     cm = np.array(cm_norm_avg)  # 轉成純 numpy array
@@ -174,15 +196,15 @@ def run_image(base_cfg):
     
 def main():
     parser = argparse.ArgumentParser(description="RankCL Framework")
-    parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--config", type=str, default="configs/default_baseline_none_deep.yaml")
     args = parser.parse_args()
 
     base_cfg = load_yaml(args.config)
     
     if base_cfg["dataset"]["dataset_type"] == "tabular":
-        run_tabular(base_cfg)
+        run_tabular_baseline_none_deep(base_cfg)
     elif base_cfg["dataset"]["dataset_type"] == "image":
-        run_image(base_cfg)
+        run_image_baseline_none_deep(base_cfg)
     else:
         raise ValueError("Unsupported dataset type")
 

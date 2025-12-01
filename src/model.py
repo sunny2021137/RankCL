@@ -98,6 +98,19 @@ class BaseTabular(nn.Module):
     def extract_features(self, encoded):
         return self.feat_head(encoded)
 
+class PretrainRCMTabular(nn.Module):
+    """Tabular encoder for structured input."""
+
+    def __init__(self, input_dim, enc_dims=[64, 32], feat_dims=[16, 8]):
+        super().__init__()
+        self.encoder = FlexibleMLP(input_dim, enc_dims)
+        self.encoded_dim = enc_dims[-1]
+
+        self.feat_head = FlexibleMLP(self.encoded_dim, feat_dims)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        return self.feat_head(x)
 
 # ======================
 #  Base Encoder (Image)
@@ -132,6 +145,33 @@ class BaseImage(nn.Module):
     def extract_features(self, encoded):
         return self.feat_head(encoded)
 
+class PretrainRCMImage(nn.Module):
+    """Image encoder based on ResNet18 backbone."""
+
+    def __init__(self, feat_dims=[16, 8]):
+        super().__init__()
+        self.resnet = models.resnet18(weights="IMAGENET1K_V1")
+        self.resnet.fc = nn.Identity()
+        self.encoded_dim = self.resnet.layer4[1].conv2.out_channels
+
+        self.feat_head = FlexibleMLP(self.encoded_dim, feat_dims)
+
+    def forward(self, x):
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+
+        x = self.resnet.layer1(x)
+        x = self.resnet.layer2(x)
+        x = self.resnet.layer3(x)
+        x = self.resnet.layer4(x)
+
+        x = self.resnet.avgpool(x)
+        x = torch.flatten(x, 1)
+        
+        return self.feat_head(x)
+    
 
 # ======================
 #  ECOC Transformer

@@ -1,7 +1,6 @@
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-import argparse
-from train.trainer import RankCLTrainer
+from train.trainer import BaselineTrainer, RankCLTrainer, CLOCTrainer
 from src.utils import make_distributions, print_label_distribution, set_seed, load_yaml
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import numpy as np
@@ -10,8 +9,10 @@ from data.data_loader import data_loader, load_tabular_dataset, Sampler
 import torch
 from data.dataset import load_image_dataset
 import gc
+from sklearn.utils import class_weight
+import argparse
 
-def run_tabular(base_cfg):
+def run_tabular_baseline_deep(base_cfg):
     dataset_name = base_cfg["dataset"]["dataset_name"]
     
     X_all, y_all = load_tabular_dataset(dataset_name)
@@ -64,17 +65,44 @@ def run_tabular(base_cfg):
         X_train_run = X_train.astype(np.float32)
         X_val_run = X_val.astype(np.float32)
         X_test_run = X_test.astype(np.float32)
-
-        # 調整 batch size 為類別數的倍數，以符合 RankCL balanced dataloader的需求
-        config["train"]["batch_size"] = (config["train"]["batch_size"] // n_classes) * n_classes
-        val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
-        test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+        
+        # NOTE:
+        if config["use_reweight"] == True:
+            classes_array = np.array(sorted([int(c) for c in np.unique(y_train)]))
+            class_weights = (torch.from_numpy(class_weight.compute_class_weight("balanced", classes=classes_array, y=y_train)).float())
+            config["class_weights"] = class_weights
 
         x_dim = X_train_run.shape[1]
+        # 調整 batch size 為類別數的倍數，以符合 RankCL balanced dataloader的需求
+        config["train"]["batch_size"] = (config["train"]["batch_size"] // n_classes) * n_classes
+
         
-        trainer = RankCLTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
+        # NOTE:
+        if config.get("use_rankcl", True):
+            print("Using RankCL Trainer")
+            val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+            train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+            train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
+            test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+            trainer = RankCLTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
+        else:
+            if config["base_method_name"] == "CLOC":
+                print("Using CLOC Trainer")
+                val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
+                test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                # net
+                trainer = CLOCTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
+            else:
+                print("Using Baseline Trainer")
+                val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=True)
+                test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                # net
+                trainer = BaselineTrainer(config, train_loader, val_loader, test_loader, n_classes, x_dim)
+
+        
         # train
         trainer.train()
         # test
@@ -100,7 +128,7 @@ def run_tabular(base_cfg):
     result_df.to_csv(f"{out_dir}/metrics.csv", index=False)  # index=False 避免存入行索引
     print(f"CSV 檔案已存成 {out_dir}/metrics.csv")
 
-def run_image(base_cfg):
+def run_image_baseline_deep(base_cfg):
     torch.set_num_threads(8)
     
     dataset_name = base_cfg["dataset"]["dataset_name"]
@@ -138,15 +166,41 @@ def run_image(base_cfg):
         X_val_run = X_val.astype(np.float32)
         X_test_run = X_test.astype(np.float32)
                     
+        # NOTE:
+        if config["use_reweight"] == True:
+            classes_array = np.array(sorted([int(c) for c in np.unique(y_train)]))
+            class_weights = (torch.from_numpy(class_weight.compute_class_weight("balanced", classes=classes_array, y=y_train)).float())
+            config["class_weights"] = class_weights
         
-        val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-        train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
-        test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
-       
         x_dim = X_train_run.shape[1] 
         
-        trainer = RankCLTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
+        
+
+        # NOTE:  
+        if config.get("use_rankcl", True):
+            val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+            train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+            train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
+            test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+        
+            trainer = RankCLTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
+        else:
+            if config["base_method_name"] == "CLOC":
+                print("Using CLOC Trainer")
+                val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                train_sampler = Sampler(X_train_run, y_train, n_classes, n_samples_per_class=config["train"]["batch_size"]//n_classes)
+                test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                # net
+                trainer = CLOCTrainer(config, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
+            else:
+                print("Using Baseline Trainer")
+                val_loader = data_loader(X_val_run, y_val, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                train_loader = data_loader(X_train_run, y_train, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=True)
+                test_loader = data_loader(X_test_run, y_test, batch_size=config["train"]["batch_size"], num_workers=config["num_workers"], shuffle=False)
+                # net
+                trainer = BaselineTrainer(config, train_loader, val_loader, test_loader, n_classes, x_dim)
+        
         # train
         trainer.train()
         # test
@@ -174,15 +228,15 @@ def run_image(base_cfg):
     
 def main():
     parser = argparse.ArgumentParser(description="RankCL Framework")
-    parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--config", type=str, default="configs/default_baseline.yaml")
     args = parser.parse_args()
 
     base_cfg = load_yaml(args.config)
     
     if base_cfg["dataset"]["dataset_type"] == "tabular":
-        run_tabular(base_cfg)
+        run_tabular_baseline_deep(base_cfg)
     elif base_cfg["dataset"]["dataset_type"] == "image":
-        run_image(base_cfg)
+        run_image_baseline_deep(base_cfg)
     else:
         raise ValueError("Unsupported dataset type")
 

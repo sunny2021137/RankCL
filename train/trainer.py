@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from copy import deepcopy
 from sklearn.metrics import confusion_matrix
@@ -5,21 +6,21 @@ from sklearn.metrics import cohen_kappa_score
 import torch
 import torch.optim as optim
 from src.loss import RankingAwareContrastiveLoss
-# from src.loss import ranking_aware_contrastive_loss
 from src.eval import evaluate_metrics
 from data.data_loader import data_loader
-from src.factory import get_model_loss
-from .early_stop import EarlyStopping
+from src.factory import get_model_loss, get_pretrain_model
+from train.early_stop import EarlyStopping
 from CLOC.loss import OrdinalContrastiveLoss_mm
 import torch.nn.functional as F
 
 class RankCLTrainer():
 
     def __init__(self, config, train_sampler, train_loader, val_loader, test_loader, num_classes, input_dim, logger=None):
-        
+        print("Using RankCL Trainer")
         self.config = config
         self.logger = logger
         self.num_classes = num_classes
+        self.input_dim = input_dim
         
         self.model, self.clf_loss_fn = get_model_loss(num_classes, input_dim, config)
         
@@ -41,7 +42,7 @@ class RankCLTrainer():
         
     
     def train(self):
-        if self.config["deep_ordinal_method"] == "CLOC":
+        if self.config["base_method_name"] == "CLOC":
             self._train_cloc()
         else:
             self._train_common()
@@ -78,7 +79,7 @@ class RankCLTrainer():
 
                 loss_link = self.rankcl_loss_fn(feat_outs, labels)
 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                     
@@ -101,7 +102,7 @@ class RankCLTrainer():
             print('Epoch {}/{}\t Loss: {:.8f}\t loss_link: {:.8f}\t loss_clf: {:.8f}'.format(epoch + 1, self.config["train"]["epochs"], loss_epoch / n_batches, loss_epoch_link / n_batches, loss_epoch_clf / n_batches))
 
             if epoch % self.config["train"]["val_epoch"] == 0 or epoch == self.config["train"]["epochs"] - 1:
-                validation_metrics = self.validate_val()
+                validation_metrics = self._validate_val()
 
                 if self.config["train"]["best_metric_name"] == "QWK":
                     current_metric  = -1*validation_metrics["QWK"]
@@ -184,7 +185,7 @@ class RankCLTrainer():
                 
                 loss_link = self.rankcl_loss_fn(feat_outs, labels)
                 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                     
@@ -203,7 +204,7 @@ class RankCLTrainer():
             
             if epoch % self.config["train"]["val_epoch"] == 0 or epoch == self.config["train"]["epochs"] - 1:
                 # NOTE: val loader
-                validation_metrics = self.validate_val()
+                validation_metrics = self._validate_val()
                 
                 if self.config["train"]["best_metric_name"] == "QWK":
                     current_metric = -1*validation_metrics["QWK"]
@@ -221,7 +222,7 @@ class RankCLTrainer():
                 # NOTE:
                 if phase == 1:
                     # train loader!!!!!!!!
-                    train_metrics = self.validate_train()
+                    train_metrics = self._validate_train()
                     early_stopping(-1*train_metrics["QWK"])
                 else: 
                     early_stopping(validation_metrics["loss_clf"])
@@ -236,7 +237,7 @@ class RankCLTrainer():
         self.model.load_state_dict(best_model_weights)
         print('Finished training.')
         
-    def validate_val(self):
+    def _validate_val(self):
         
         idx_label_score = []
         
@@ -252,12 +253,12 @@ class RankCLTrainer():
                 
                 _, clf_outs = self.model(inputs)
                 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
                 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                 loss_clf = self.clf_loss_fn(clf_outs, labels)
@@ -280,7 +281,7 @@ class RankCLTrainer():
         return all_dict
 
 
-    def validate_train(self):
+    def _validate_train(self):
         
         idx_label_score = []
         
@@ -296,12 +297,12 @@ class RankCLTrainer():
                 
                 _, clf_outs = self.model(inputs)
                 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
                 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                 loss_clf = self.clf_loss_fn(clf_outs, labels)
@@ -320,7 +321,7 @@ class RankCLTrainer():
         all_dict = evaluate_metrics(labels, preds, self.num_classes)
         all_dict["QWK"] = cohen_kappa_score(labels, preds, weights="quadratic", labels=unique_labels)
         all_dict["loss_clf"]= loss_clf_epoch / n_batches
-        print(f'validate f1-score(macro):{all_dict["f1-score(macro avg)"]}, \t QWK:{all_dict["QWK"]}' )
+        print(f'train f1-score(macro):{all_dict["f1-score(macro avg)"]}, \t QWK:{all_dict["QWK"]}' )
         return all_dict
 
     def test(self):
@@ -336,7 +337,7 @@ class RankCLTrainer():
 
                 _, clf_outs = self.model(inputs)
 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
@@ -359,18 +360,172 @@ class RankCLTrainer():
         print(f'test f1-score(macro):{all_dict["f1-score(macro avg)"]}, \t QWK:{all_dict["QWK"]}' )
         return all_dict
     
+    # FIXME:
+    def load_pretrained(self):
+        # FIXME:
+        if os.path.exists(self.config.get("pretrained_model_path", "")):
+            # TODO: load pretrained model
+            self.pretrained_model.load_state_dict(torch.load(self.config["pretrained_model_path"]))
+        else:
+            print("Starting pretraining...")
+            self.pretrain()
+            print("Finished pretraining.")
+        
+            if self.config["save_pretrained_model"]:
+                if self.config['pretrained_model_path'] is not None:
+                    torch.save(self.pretrained_model.state_dict(), self.config['pretrained_model_path'])
+                else:
+                    raise ValueError("Please provide a path to save the pretrained model.")
+                    
+            
+        # TODO: 傳給model weights
+        if self.config["base_method_name"] == "OBDECOC":
+            pass
+        else:
+            raise NotImplementedError("Pretraining only implemented for OBDECOC + RCM.")
     
+
+class RankCLPretrainedTrainer():
+
+    def __init__(self, config, train_sampler, val_sampler, test_sampler, num_classes, input_dim, logger=None):
+        print("Using RankCL Trainer")
+        self.config = config
+        self.logger = logger
+        self.num_classes = num_classes
+        self.input_dim = input_dim
+        
+        self.model = get_pretrain_model(input_dim, config)
+        self.rankcl_loss_fn = RankingAwareContrastiveLoss(num_classes, with_correct_penalty=config['rankcl'].get("with_correct_penalty", True), similarity_metric=config['rankcl'].get("similarity_metric", "cosine"))
+        
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.config["search_params"]["pretrain_lr"], weight_decay=self.config["train"]["weight_decay"])
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        self.train_sampler = train_sampler
+        self.val_sampler = val_sampler
+        self.test_sampler = test_sampler
+        
+        self.model.to(self.device)
+        self.rankcl_loss_fn.to(self.device)
+        
+    
+    def get_model_weights(self):
+        return deepcopy(self.model.state_dict())
+    
+    def train(self):
+        
+        # early stopping
+        early_stopping = EarlyStopping(patience=self.config["train"]["patience"], check_freq=self.config["train"]["val_epoch"])
+        best_model_weights = deepcopy(self.model.state_dict())
+        best_metric = None
+        
+        print('Starting training...')
+               
+        for epoch in range(self.config["train"]["epochs"]): 
+            self.model.train()
+            
+            # create balanced sampler data for this epoch
+            X_train, y_train = self.train_sampler.sample_epoch(batch_shuffle=False)            
+            train_loader_sample = data_loader(X_train, y_train, batch_size=self.train_sampler.batch_size, num_workers=self.config["num_workers"], shuffle=False)
+
+            loss_epoch = 0.0
+            n_batches = 0
+            
+            for data in train_loader_sample:
+                self.model.train()
+                
+                inputs, labels = data
+                inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
+                
+                self.optimizer.zero_grad()
+
+                    
+                feat_outs = self.model(inputs)
+
+                loss = self.rankcl_loss_fn(feat_outs, labels)
+                
+                loss.backward()
+                self.optimizer.step()
+                
+                loss_epoch += loss.item()
+                
+                n_batches += 1
+
+            print('Epoch {}/{}\t Loss: {:.8f}'.format(epoch + 1, self.config["train"]["epochs"], loss_epoch / n_batches))
+
+            if epoch % self.config["train"]["val_epoch"] == 0 or epoch == self.config["train"]["epochs"] - 1:
+                current_metric = self._validate_loss()
+                print(f'Validation Loss: {current_metric}')
+                
+                if (best_metric is None) or (current_metric < best_metric):
+                    best_metric = current_metric
+                    best_model_weights = deepcopy(self.model.state_dict())
+                
+                early_stopping(current_metric)
+                if early_stopping.early_stop:
+                    print(f"早停於 epoch {epoch}")    
+                    break
+                             
+        self.model.load_state_dict(best_model_weights)
+        print('Finished training.')
+        
+    def _validate_loss(self):
+        loss_epoch = 0.0
+        n_batches = 0
+        
+        X_val, y_val = self.val_sampler.sample_epoch(batch_shuffle=False)            
+        val_loader_sample = data_loader(X_val, y_val, batch_size=self.val_sampler.batch_size, num_workers=self.config["num_workers"], shuffle=False)
+
+        self.model.eval()
+        with torch.no_grad():
+            for data in val_loader_sample:
+                inputs, labels = data
+                inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
+                
+                feat_outs = self.model(inputs)
+                
+                loss = self.rankcl_loss_fn(feat_outs, labels)
+                loss_epoch += loss.item()
+                n_batches += 1
+        
+        return loss_epoch / n_batches
+    
+    def test_loss(self):
+        loss_epoch = 0.0
+        n_batches = 0
+        
+        X_test, y_test = self.test_sampler.sample_epoch(batch_shuffle=False)            
+        test_loader_sample = data_loader(X_test, y_test, batch_size=self.test_sampler.batch_size, num_workers=self.config["num_workers"], shuffle=False)
+
+        self.model.eval()
+        with torch.no_grad():
+            for data in test_loader_sample:
+                inputs, labels = data
+                inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
+                
+                feat_outs = self.model(inputs)
+                
+                loss = self.rankcl_loss_fn(feat_outs, labels)
+                loss_epoch += loss.item()
+                n_batches += 1
+        
+        return loss_epoch / n_batches
+           
 class BaselineTrainer():
 
-    def __init__(self, config, train_loader, val_loader, test_loader, num_classes, input_dim, logger=None):
-        
+    def __init__(self, config, train_loader, val_loader, test_loader, num_classes, input_dim, is_pretrain=False, logger=None):
+        print("Using Baseline Trainer")
         self.config = config
         self.logger = logger
         self.num_classes = num_classes
         
         self.model, self.clf_loss_fn = get_model_loss(num_classes, input_dim, config)
-       
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.config["search_params"]["lr"], weight_decay=self.config["train"]["weight_decay"])
+
+        self.lr = self.config["search_params"]["lr"] if not is_pretrain else self.config["search_params"]["pretrain_lr"]
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.config["train"]["weight_decay"])
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -408,7 +563,7 @@ class BaselineTrainer():
                     
                 clf_outs = self.model(inputs)
 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                     
@@ -424,7 +579,7 @@ class BaselineTrainer():
             print('Epoch {}/{}\t Loss: {:.8f}\t'.format(epoch + 1, self.config["train"]["epochs"], loss_epoch / n_batches))
 
             if epoch % self.config["train"]["val_epoch"] == 0 or epoch == self.config["train"]["epochs"] - 1:
-                validation_metrics = self.validate()
+                validation_metrics = self._validate()
 
                 if self.config["train"]["best_metric_name"] == "QWK":
                     current_metric  = -1*validation_metrics["QWK"]
@@ -448,7 +603,7 @@ class BaselineTrainer():
         self.model.load_state_dict(best_model_weights)
         print('Finished training.')
 
-    def validate(self):
+    def _validate(self):
         
         idx_label_score = []
         
@@ -464,12 +619,12 @@ class BaselineTrainer():
                 
                 clf_outs = self.model(inputs)
                 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
                 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                 loss_clf = self.clf_loss_fn(clf_outs, labels)
@@ -504,7 +659,7 @@ class BaselineTrainer():
 
                 clf_outs = self.model(inputs)
 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
@@ -530,7 +685,7 @@ class BaselineTrainer():
 class CLOCTrainer():
 
     def __init__(self, config, train_sampler, train_loader, val_loader, test_loader, num_classes, input_dim, logger=None):
-        
+        print("Using CLOC Trainer")
         self.config = config
         self.logger = logger
         self.num_classes = num_classes
@@ -620,7 +775,7 @@ class CLOCTrainer():
                 n_batches += 1
             
             if epoch % self.config["train"]["val_epoch"] == 0 or epoch == self.config["train"]["epochs"] - 1:
-                validation_metrics = self.validate_val()
+                validation_metrics = self._validate_val()
                 
                 if self.config["train"]["best_metric_name"] == "QWK":
                     current_metric = -1*validation_metrics["QWK"]
@@ -636,7 +791,7 @@ class CLOCTrainer():
                     best_model_weights = deepcopy(self.model.state_dict())
             
                 if phase == 1:
-                    train_metrics = self.validate_train()
+                    train_metrics = self._validate_train()
                     early_stopping(-1*train_metrics["QWK"])
                 else: 
                     early_stopping(validation_metrics["loss_clf"])
@@ -651,7 +806,7 @@ class CLOCTrainer():
         self.model.load_state_dict(best_model_weights)
         print('Finished training.')
         
-    def validate_val(self):
+    def _validate_val(self):
         
         idx_label_score = []
         
@@ -667,12 +822,12 @@ class CLOCTrainer():
                 
                 clf_outs = self.model(inputs)
                 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
                 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                 loss_clf = self.clf_loss_fn(clf_outs, labels)
@@ -695,7 +850,7 @@ class CLOCTrainer():
         return all_dict
 
 
-    def validate_train(self):
+    def _validate_train(self):
         
         idx_label_score = []
         
@@ -711,12 +866,12 @@ class CLOCTrainer():
                 
                 clf_outs = self.model(inputs)
                 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
                 
-                if self.config["deep_ordinal_method"] == "DeepCLMWK":
+                if self.config["base_method_name"] == "DeepCLMWK":
                     clf_outs = clf_outs.cpu()
                     labels = labels.cpu()
                 loss_clf = self.clf_loss_fn(clf_outs, labels)
@@ -751,7 +906,7 @@ class CLOCTrainer():
 
                 clf_outs = self.model(inputs)
 
-                if self.config["deep_ordinal_method"] == "OBDECOC":
+                if self.config["base_method_name"] == "OBDECOC":
                     predictions = self.model.transformer.labels(clf_outs)
                 else:
                     predictions = torch.argmax(clf_outs, dim=1)
