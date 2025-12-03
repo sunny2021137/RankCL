@@ -20,7 +20,7 @@ pip install -r requirements.txt
 --- -->
 
 
-## 📂 Dataset Setup
+## Dataset Setup
 
 ### Tabular Datasets
 
@@ -265,7 +265,7 @@ python scripts/train.py --config configs/<dataset_type>/<dataset>/<method>.yaml
   * For **image datasets** (e.g., FGNET, Adience), use `dataset_type=image`
   * For **tabular datasets**, use `dataset_type=tabular`
 * The training script runs for the number of epochs specified in the config file.
-* Upon completion, evaluation metrics (e.g., QWK, F1-score, MAE) are automatically printed and/or saved.
+* Upon completion, evaluation metrics are automatically saved in `output/<dataset_type>/<dataset>/<method>/metrics.csv`. 
 
 ---
 
