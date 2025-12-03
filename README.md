@@ -257,7 +257,7 @@ All experiments in the paper can be reproduced by training the models from scrat
 
 ```bash
 # Train RankCL and automatically generate evaluation results
-python scripts/train.py --config configs/<dataset_type>/<dataset>/<method>.yaml
+python scripts/main.py --config configs/<dataset_type>/<dataset>/<method>.yaml
 ```
 
 * Replace `<dataset_type>`, `<dataset>`, and `<method>` with your choices:
