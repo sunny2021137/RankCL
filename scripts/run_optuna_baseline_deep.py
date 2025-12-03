@@ -1,5 +1,7 @@
+import sys
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import torch
 from src.factory import get_optuna_params
 from src.utils import load_yaml, set_seed, make_distributions, print_label_distribution

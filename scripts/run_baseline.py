@@ -1,5 +1,7 @@
+import sys
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from src.eval import evaluate_metrics
 from src.factory import get_model_ml
 import argparse

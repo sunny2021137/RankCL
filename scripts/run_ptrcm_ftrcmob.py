@@ -1,6 +1,8 @@
 from copy import deepcopy
+import sys
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import argparse
 from train.trainer import RankCLPretrainedTrainer, RankCLTrainer
 from src.utils import make_distributions, print_label_distribution, set_seed, load_yaml

@@ -2,7 +2,6 @@ from typing import Optional
 import torch
 from torch import Tensor
 from dlordinal.losses.custom_targets_loss import CustomTargetsCrossEntropyLoss
-
 import numpy as np
 from scipy.stats import binom
 
