@@ -1,21 +1,21 @@
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-import torch
 from src.factory import get_optuna_params_ml, get_model_ml
 from src.utils import set_seed, make_distributions, print_label_distribution
 from src.eval import evaluate_metrics
-from data.dataset import load_image_dataset
+from data.dataset import load_image_dataset, load_tabular_dataset
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 import optuna
 import gc
 import yaml
-from data.data_loader import load_tabular_dataset
-from run_baseline_none_deep import get_features, get_pretrained_res18
+from scripts.run_baseline import get_features, get_pretrained_res18
+import argparse
+from src.utils import load_yaml
 
             
                 
-def run_optuna_tabular_baseline_none_deep(config):
+def run_optuna_tabular_baseline(config):
     dataset_name = config["dataset"]["dataset_name"]
 
     X_all, y_all = load_tabular_dataset(dataset_name)
@@ -99,7 +99,7 @@ def run_optuna_tabular_baseline_none_deep(config):
         gc.collect()  
     
     
-def run_optuna_image_baseline_none_deep(config):
+def run_optuna_image_baseline(config):
     seed = config["seed"]
     set_seed(seed)
     
@@ -166,3 +166,20 @@ def run_optuna_image_baseline_none_deep(config):
     with open(save_path, "w") as f:
         yaml.safe_dump(best_params_dict, f, sort_keys=False) 
    
+   
+def main():
+    parser = argparse.ArgumentParser(description="RankCL Framework")
+    parser.add_argument("--config", type=str, default="configs/optuna/default_optuna_baseline.yaml")
+    args = parser.parse_args()
+
+    base_cfg = load_yaml(args.config)
+    
+    if base_cfg["dataset"]["dataset_type"] == "tabular":
+        run_optuna_tabular_baseline(base_cfg)
+    elif base_cfg["dataset"]["dataset_type"] == "image":
+        run_optuna_image_baseline(base_cfg)
+    else:
+        raise ValueError("Unsupported dataset type")
+
+if __name__ == "__main__":
+    main()

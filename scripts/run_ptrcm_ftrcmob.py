@@ -2,14 +2,14 @@ from copy import deepcopy
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import argparse
-from train.trainer import BaselineTrainer, RankCLPretrainedTrainer, RankCLTrainer
+from train.trainer import RankCLPretrainedTrainer, RankCLTrainer
 from src.utils import make_distributions, print_label_distribution, set_seed, load_yaml
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import numpy as np
 import pandas as pd
-from data.data_loader import data_loader, load_tabular_dataset, Sampler
+from data.data_loader import data_loader, Sampler
 import torch
-from data.dataset import load_image_dataset
+from data.dataset import load_image_dataset, load_tabular_dataset
 import gc
 
 def run_ptrcm_ftrcmob_tabular(base_cfg):
@@ -276,7 +276,7 @@ def run_ptrcm_ftrcmob_image(base_cfg):
     
 def main():
     parser = argparse.ArgumentParser(description="RankCL Framework")
-    parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--config", type=str, default="configs/default_ptrcm_ftrcmob.yaml")
     args = parser.parse_args()
 
     base_cfg = load_yaml(args.config)

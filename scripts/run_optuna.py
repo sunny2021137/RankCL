@@ -7,12 +7,13 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 import optuna
 import gc
 from data.data_loader import data_loader, load_tabular_dataset, Sampler
-from train.trainer import RankCLPretrainedTrainer, RankCLTrainer
+from train.trainer import RankCLTrainer
 from src.utils import load_yaml, make_distributions, print_label_distribution, set_seed
-from src.factory import get_optuna_params, get_pretrain_optuna_params
+from src.factory import get_optuna_params
 from data.dataset import load_image_dataset
 
-def run_pretrainedRCM_optuna_tabular(config):
+
+def run_optuna_tabular(config):
     dataset_name = config["dataset"]["dataset_name"]
 
     X_all, y_all = load_tabular_dataset(dataset_name)
@@ -39,8 +40,7 @@ def run_pretrainedRCM_optuna_tabular(config):
     
         def objective(trial):
             opt_params = {}
-            # NOTE: 只有lambda需要調整，optuna 3 次即可
-            opt_params["search_params"] = get_pretrain_optuna_params(trial)
+            opt_params["search_params"] = get_optuna_params(config["base_method_name"], config.get("use_rankcl", True), trial)
             
             # 合併設定（base 為底，hyper 覆蓋）
             params = config | opt_params
@@ -61,39 +61,36 @@ def run_pretrainedRCM_optuna_tabular(config):
                 X_val_e = X_val_e.astype(np.float32)
                 X_val_cv = X_val_cv.astype(np.float32)
                 
-                # NOTE:
+                val_loader = data_loader(X_val_e, y_val_e, batch_size=params["train"]["batch_size"], num_workers=params["num_workers"], shuffle=False)
+                train_loader = data_loader(X_train_e, y_train_e, batch_size=params["train"]["batch_size"], num_workers=params["num_workers"], shuffle=False) 
                 train_sampler = Sampler(X_train_e, y_train_e, n_classes, n_samples_per_class=params["train"]["batch_size"]//n_classes)
-                val_sampler = Sampler(X_val_e, y_val_e, n_classes, n_samples_per_class=params["train"]["batch_size"]//n_classes)
-                test_sampler = Sampler(X_val_cv, y_val_cv, n_classes, n_samples_per_class=params["train"]["batch_size"]//n_classes)
+                test_loader = data_loader(X_val_cv, y_val_cv, batch_size=params["train"]["batch_size"], num_workers=params["num_workers"], shuffle=False)
                 
                 # net
                 x_dim = X_train_e.shape[1]
-                
-                # NOTE:
-                trainer = RankCLPretrainedTrainer(params, train_sampler, val_sampler, test_sampler, n_classes, x_dim)
-                
+                             
+                trainer = RankCLTrainer(params, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
                 # train
                 trainer.train()
-                # NOTE: test
-                test_loss= trainer.test_loss()
+                # test
+                result = trainer.test()
                                 
-                cv_scores.append(test_loss)
+                cv_scores.append(result[config["train"]["best_metric_name"]])
                 
             # 計算folds平均分數
             return np.mean(cv_scores)
         
-        # NOTE:
-        study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=seed))  # 目標是最大化驗證準確率
-        study.optimize(objective, n_trials=config["optuna"]["n_trials"])  # 執行 3 次試驗
+        # 使用 Optuna 進行超參數搜尋
+        study = optuna.create_study(direction=config["optuna"]["best_direction"], sampler=optuna.samplers.TPESampler(seed=seed))  # 目標是最大化驗證準確率
+        study.optimize(objective, n_trials=config["optuna"]["n_trials"])  # 執行 15 次試驗
         
         # 輸出最佳超參數
         print("Best hyperparameters:", study.best_params)
            
-        # NOTE:
         if distribution is not None:
-            save_path = f'{config["best_hyperparams_dir"]}/pretrained/{config["dataset"]["dataset_type"]}/{dataset_name}_{distribution}/{config["method_name"]}/seed{config["seed"]}_run{run}.yaml'
+            save_path = f'{config["best_hyperparams_dir"]}/tabular/{dataset_name}_{distribution}/{config["method_name"]}/seed{config["seed"]}_run{run}.yaml'
         else:
-            save_path = f'{config["best_hyperparams_dir"]}/pretrained/{config["dataset"]["dataset_type"]}/{dataset_name}/{config["method_name"]}/seed{config["seed"]}_run{run}.yaml'
+            save_path = f'{config["best_hyperparams_dir"]}/tabular/{dataset_name}/{config["method_name"]}/seed{config["seed"]}_run{run}.yaml'
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         
         best_params_dict = {
@@ -108,8 +105,7 @@ def run_pretrainedRCM_optuna_tabular(config):
         run += 1
         gc.collect()  
     
-
-def run_pretrainedRCM_optuna_image(config):
+def run_optuna_image(config):
     seed = config["seed"]
     set_seed(seed)
     
@@ -122,7 +118,7 @@ def run_pretrainedRCM_optuna_image(config):
     
     def objective(trial):
         opt_params = {}
-        opt_params["search_params"] = get_pretrain_optuna_params(trial)
+        opt_params["search_params"] = get_optuna_params(config["base_method_name"], config.get("use_rankcl", True), trial)
         
         # 合併設定（base 為底，hyper 覆蓋）
         params = config | opt_params
@@ -144,33 +140,30 @@ def run_pretrainedRCM_optuna_image(config):
             X_val_e = X_val_e.astype(np.float32)
             X_val_cv = X_val_cv.astype(np.float32)
             
-            # NOTE:
+            val_loader = data_loader(X_val_e, y_val_e, batch_size=params["train"]["batch_size"], num_workers=params["num_workers"], shuffle=False)
+            train_loader = data_loader(X_train_e, y_train_e, batch_size=params["train"]["batch_size"], num_workers=params["num_workers"], shuffle=False)
             train_sampler = Sampler(X_train_e, y_train_e, n_classes, n_samples_per_class=params["train"]["batch_size"]//n_classes)
-            val_sampler = Sampler(X_val_e, y_val_e, n_classes, n_samples_per_class=params["train"]["batch_size"]//n_classes)
-            test_sampler = Sampler(X_val_cv, y_val_cv, n_classes, n_samples_per_class=params["train"]["batch_size"]//n_classes)
+            test_loader = data_loader(X_val_cv, y_val_cv, batch_size=params["train"]["batch_size"], num_workers=params["num_workers"], shuffle=False)
             
             x_dim = X_train_e.shape[1]            
-            # NOTE:
-            trainer = RankCLPretrainedTrainer(params, train_sampler, val_sampler, test_sampler, n_classes, x_dim)
-
+            trainer = RankCLTrainer(params, train_sampler, train_loader, val_loader, test_loader, n_classes, x_dim)
             # train
             trainer.train()
-            # NOTE: test
-            test_loss = trainer.test_loss()
+            # test
+            result = trainer.test()
                  
-            cv_scores.append(test_loss)
+            cv_scores.append(result[config["train"]["best_metric_name"]])
             
         return np.mean(cv_scores)
     
-    # NOTE:
-    study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=seed))  # 目標是最大化驗證準確率
-    study.optimize(objective, n_trials=config["optuna"]["n_trials"])  # 執行 3 次試驗
+    # 使用 Optuna 進行超參數搜尋
+    study = optuna.create_study(direction=config["optuna"]["best_direction"], sampler=optuna.samplers.TPESampler(seed=seed))  # 目標是最大化驗證準確率
+    study.optimize(objective, n_trials=config["optuna"]["n_trials"])  # 執行 15 次試驗
     
     # 輸出最佳超參數
     print("Best hyperparameters:", study.best_params)
     
-    # NOTE:
-    save_path = f'{config["best_hyperparams_dir"]}/pretrained/{config["dataset"]["dataset_type"]}/{dataset_name}/{config["method_name"]}/seed{config["seed"]}.yaml'
+    save_path = f'{config["best_hyperparams_dir"]}/image/{dataset_name}/{config["method_name"]}/seed{config["seed"]}.yaml'
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
                     
     best_params_dict = {
@@ -180,22 +173,20 @@ def run_pretrainedRCM_optuna_image(config):
     }
 
     with open(save_path, "w") as f:
-        yaml.safe_dump(best_params_dict, f, sort_keys=False)
-        
-    gc.collect()  
+        yaml.safe_dump(best_params_dict, f, sort_keys=False)     
    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Optuna Hyperparameter Optimization")
-    parser.add_argument("--config", type=str, default="configs/optuna/default_optuna_pretrain.yaml")
+    parser.add_argument("--config", type=str, default="configs/optuna/default_optuna.yaml")
     args = parser.parse_args()
 
     opt_cfg = load_yaml(args.config)
 
 
     if opt_cfg["dataset"]["dataset_type"] == "tabular":
-        run_pretrainedRCM_optuna_tabular(opt_cfg)
+        run_optuna_tabular(opt_cfg)
     elif opt_cfg["dataset"]["dataset_type"] == "image":
-        run_pretrainedRCM_optuna_image(opt_cfg)
+        run_optuna_image(opt_cfg)
     else:
         raise ValueError("Unsupported dataset type")
  

@@ -7,9 +7,8 @@ from src.utils import make_distributions, print_label_distribution, set_seed, lo
 from sklearn.model_selection import StratifiedKFold
 import numpy as np
 import pandas as pd
-from data.data_loader import load_tabular_dataset
 import torch
-from data.dataset import load_image_dataset
+from data.dataset import load_image_dataset, load_tabular_dataset
 import gc
 import torchvision.models as models
 import torch.nn as nn
@@ -21,17 +20,6 @@ def get_pretrained_res18():
     res.fc = nn.Identity() # 去除最後分類層
     return res
 
-# def get_features(model, input_data):
-#     device = "cuda" if torch.cuda.is_available() else "cpu"
-#     model = model.to(device)
-    
-#     model.eval()
-#     with torch.no_grad():
-#         img_tensor = torch.from_numpy(input_data)
-#         img_tensor = img_tensor.to(device)  # device = "cuda" or "cpu"
-#         feature = model(img_tensor).squeeze().cpu().numpy()  # [512]
-     
-#     return feature
 
 def get_features(model, data_np, batch_size=64):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,7 +37,7 @@ def get_features(model, data_np, batch_size=64):
     
     return torch.cat(features).numpy()
 
-def run_tabular_baseline_none_deep(base_cfg):
+def run_tabular_baseline(base_cfg):
     dataset_name = base_cfg["dataset"]["dataset_name"]
     
     X_all, y_all = load_tabular_dataset(dataset_name)
@@ -129,7 +117,7 @@ def run_tabular_baseline_none_deep(base_cfg):
     result_df.to_csv(f"{out_dir}/metrics.csv", index=False)  # index=False 避免存入行索引
     print(f"CSV 檔案已存成 {out_dir}/metrics.csv")
 
-def run_image_baseline_none_deep(base_cfg):
+def run_image_baseline(base_cfg):
     
     dataset_name = base_cfg["dataset"]["dataset_name"]
     seed = base_cfg["seed"]
@@ -196,15 +184,15 @@ def run_image_baseline_none_deep(base_cfg):
     
 def main():
     parser = argparse.ArgumentParser(description="RankCL Framework")
-    parser.add_argument("--config", type=str, default="configs/default_baseline_none_deep.yaml")
+    parser.add_argument("--config", type=str, default="configs/default_baseline.yaml")
     args = parser.parse_args()
 
     base_cfg = load_yaml(args.config)
     
     if base_cfg["dataset"]["dataset_type"] == "tabular":
-        run_tabular_baseline_none_deep(base_cfg)
+        run_tabular_baseline(base_cfg)
     elif base_cfg["dataset"]["dataset_type"] == "image":
-        run_image_baseline_none_deep(base_cfg)
+        run_image_baseline(base_cfg)
     else:
         raise ValueError("Unsupported dataset type")
 

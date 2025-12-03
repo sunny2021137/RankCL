@@ -5,9 +5,9 @@ from src.utils import make_distributions, print_label_distribution, set_seed, lo
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import numpy as np
 import pandas as pd
-from data.data_loader import data_loader, load_tabular_dataset, Sampler
+from data.data_loader import data_loader, Sampler
 import torch
-from data.dataset import load_image_dataset
+from data.dataset import load_image_dataset, load_tabular_dataset
 import gc
 from sklearn.utils import class_weight
 import argparse
@@ -227,8 +227,8 @@ def run_image_baseline_deep(base_cfg):
     
     
 def main():
-    parser = argparse.ArgumentParser(description="RankCL Framework")
-    parser.add_argument("--config", type=str, default="configs/default_baseline.yaml")
+    parser = argparse.ArgumentParser(description="Deep Ordinal Baseline Runner")
+    parser.add_argument("--config", type=str, default="configs/default_baseline_deep.yaml")
     args = parser.parse_args()
 
     base_cfg = load_yaml(args.config)

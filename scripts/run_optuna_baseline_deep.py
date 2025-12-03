@@ -3,9 +3,8 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import torch
 from src.factory import get_optuna_params
 from src.utils import load_yaml, set_seed, make_distributions, print_label_distribution
-from data.data_loader import data_loader, load_tabular_dataset, Sampler
-from data.dataset import load_image_dataset
-from copy import deepcopy
+from data.data_loader import data_loader, Sampler
+from data.dataset import load_image_dataset, load_tabular_dataset
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.utils import class_weight
@@ -13,6 +12,7 @@ from train.trainer import BaselineTrainer, CLOCTrainer, RankCLTrainer
 import optuna
 import gc
 import yaml
+import argparse
 
                 
 def run_optuna_tabular_baseline_deep(config):
@@ -230,4 +230,21 @@ def run_optuna_image_baseline_deep(config):
     with open(save_path, "w") as f:
         yaml.safe_dump(best_params_dict, f, sort_keys=False)   
         
+        
+def main():
+    parser = argparse.ArgumentParser(description="RankCL Framework")
+    parser.add_argument("--config", type=str, default="configs/optuna/default_optuna_baseline_deep.yaml")
+    args = parser.parse_args()
+
+    base_cfg = load_yaml(args.config)
+    
+    if base_cfg["dataset"]["dataset_type"] == "tabular":
+        run_optuna_tabular_baseline_deep(base_cfg)
+    elif base_cfg["dataset"]["dataset_type"] == "image":
+        run_optuna_image_baseline_deep(base_cfg)
+    else:
+        raise ValueError("Unsupported dataset type")
+
+if __name__ == "__main__":
+    main()
     
