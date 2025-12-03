@@ -272,7 +272,7 @@ def run_ptrcm_ftob_image(base_cfg):
     
     
 def main():
-    parser = argparse.ArgumentParser(description="RankCL Framework")
+    parser = argparse.ArgumentParser(description="PT-RCM + FT-OB")
     parser.add_argument("--config", type=str, default="configs/default_ptrcm_ftob.yaml")
     args = parser.parse_args()
 

@@ -285,7 +285,7 @@ def run_ptob_ftrcmob_optuna_image(config):
 
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Optuna Hyperparameter Optimization")
+    parser = argparse.ArgumentParser(description="Optuna Hyperparameter Optimization (PT-OB + FT-RCM-OB)")
     parser.add_argument("--config", type=str, default="configs/optuna/default_optuna_ptob_ftrcmob.yaml")
     args = parser.parse_args()
 

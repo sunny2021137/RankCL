@@ -183,7 +183,7 @@ def run_image_baseline(base_cfg):
     
     
 def main():
-    parser = argparse.ArgumentParser(description="RankCL Framework")
+    parser = argparse.ArgumentParser(description="Baselines")
     parser.add_argument("--config", type=str, default="configs/default_baseline.yaml")
     args = parser.parse_args()
 

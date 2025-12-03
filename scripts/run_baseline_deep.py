@@ -227,7 +227,7 @@ def run_image_baseline_deep(base_cfg):
     
     
 def main():
-    parser = argparse.ArgumentParser(description="Deep Ordinal Baseline Runner")
+    parser = argparse.ArgumentParser(description="Deep Ordinal Baselines")
     parser.add_argument("--config", type=str, default="configs/default_baseline_deep.yaml")
     args = parser.parse_args()
 

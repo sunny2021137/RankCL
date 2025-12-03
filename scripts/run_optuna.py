@@ -176,7 +176,7 @@ def run_optuna_image(config):
         yaml.safe_dump(best_params_dict, f, sort_keys=False)     
    
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Optuna Hyperparameter Optimization")
+    parser = argparse.ArgumentParser(description="Optuna Hyperparameter Optimization (RCM Framework)")
     parser.add_argument("--config", type=str, default="configs/optuna/default_optuna.yaml")
     args = parser.parse_args()
 

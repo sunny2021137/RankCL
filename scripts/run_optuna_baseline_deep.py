@@ -232,7 +232,7 @@ def run_optuna_image_baseline_deep(config):
         
         
 def main():
-    parser = argparse.ArgumentParser(description="RankCL Framework")
+    parser = argparse.ArgumentParser(description="Optuna Hyperparameter Optimization (Deep Ordinal Baselines)")
     parser.add_argument("--config", type=str, default="configs/optuna/default_optuna_baseline_deep.yaml")
     args = parser.parse_args()
 
