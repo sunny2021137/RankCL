@@ -1,4 +1,5 @@
 method_name: OBDECOC + RCM (Squared L2)
+method_type: RankCL
 base_method_name: OBDECOC
 use_rankcl: true
 use_reweight: false
@@ -22,7 +23,6 @@ train:
   epochs: 400
   batch_size: 128
   weight_decay: 0
-  optimizer: Adam
   val_epoch: 1
   patience: 50
   best_metric_name: QWK

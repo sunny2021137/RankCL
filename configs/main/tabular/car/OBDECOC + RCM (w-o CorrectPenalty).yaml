@@ -1,4 +1,5 @@
 method_name: OBDECOC + RCM (w-o CorrectPenalty)
+method_type: RankCL
 base_method_name: OBDECOC
 use_rankcl: true
 use_reweight: false

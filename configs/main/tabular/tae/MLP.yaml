@@ -1,4 +1,5 @@
 method_name: MLP
+method_type: Baseline
 base_method_name: MLP
 use_rankcl: false
 use_reweight: false

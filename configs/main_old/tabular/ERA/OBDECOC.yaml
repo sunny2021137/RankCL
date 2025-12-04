@@ -1,0 +1,25 @@
+method_name: OBDECOC
+base_method_name: OBDECOC
+use_rankcl: false
+use_reweight: false
+out_dir: output
+best_hyperparams_dir: configs/results_hyperparams
+seed: 0
+num_workers: 0
+dataset:
+  dataset_name: ERA
+  dataset_type: tabular
+model:
+  model_params:
+    enc_dims:
+    - 128
+    - 64
+train:
+  n_runs: 5
+  epochs: 400
+  batch_size: 128
+  weight_decay: 0
+  val_epoch: 1
+  patience: 50
+  best_metric_name: QWK
+  val_ratio: 0.15

@@ -1,5 +1,8 @@
 method_name: LinearLayer + RCM
-deep_ordinal_method: LinearLayer
+method_type: RankCL
+base_method_name: LinearLayer
+use_rankcl: true
+use_reweight: false
 out_dir: output
 best_hyperparams_dir: configs/results_hyperparams
 seed: 0
@@ -17,8 +20,10 @@ train:
   epochs: 400
   batch_size: 128
   weight_decay: 0
-  optimizer: Adam
   val_epoch: 1
   patience: 50
   best_metric_name: QWK
   val_ratio: 0.15
+rankcl:
+  with_correct_penalty: true
+  similarity_metric: cosine

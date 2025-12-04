@@ -1,4 +1,5 @@
 method_name: SoftLabelCLOC
+method_type: BaselineDeep
 base_method_name: SoftLabel
 use_rankcl: false
 use_reweight: false

@@ -1,4 +1,5 @@
 method_name: StickBreaking + Reweight
+method_type: BaselineDeep
 base_method_name: StickBreaking
 use_rankcl: false
 use_reweight: true

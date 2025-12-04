@@ -1,4 +1,5 @@
 method_name: LinearLayer + Reweight
+method_type: BaselineDeep
 base_method_name: LinearLayer
 use_rankcl: false
 use_reweight: true

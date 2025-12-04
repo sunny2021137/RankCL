@@ -1,4 +1,5 @@
 method_name: XGBoost
+method_type: Baseline
 base_method_name: XGBoost
 use_rankcl: false
 use_reweight: false

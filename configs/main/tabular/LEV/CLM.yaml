@@ -1,4 +1,5 @@
 method_name: CLM
+method_type: Baseline
 base_method_name: CLM
 use_rankcl: false
 use_reweight: false

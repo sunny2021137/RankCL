@@ -1,4 +1,5 @@
 method_name: Ordinal Tree
+method_type: Baseline
 base_method_name: Ordinal Tree
 use_rankcl: false
 use_reweight: false

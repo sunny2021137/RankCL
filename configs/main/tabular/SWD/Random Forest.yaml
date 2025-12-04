@@ -1,4 +1,5 @@
 method_name: Random Forest
+method_type: Baseline
 base_method_name: Random Forest
 use_rankcl: false
 use_reweight: false

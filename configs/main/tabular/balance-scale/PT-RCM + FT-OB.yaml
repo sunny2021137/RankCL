@@ -1,4 +1,5 @@
 method_name: PT-RCM + FT-OB
+method_type: PT-RCM + FT-OB
 base_method_name: OBDECOC
 out_dir: output
 best_hyperparams_dir: configs/results_hyperparams
