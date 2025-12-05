@@ -1,0 +1,5 @@
+search_params:
+  pretrain_lr: 0.001
+  lr: 0.01
+best_value: 0.9710216252891651
+best_trial: 3

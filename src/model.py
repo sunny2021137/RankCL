@@ -173,9 +173,74 @@ class PretrainRCMImage(nn.Module):
         return self.feat_head(x)
     
 
+
 # ======================
-#  ECOC Transformer
+#  OBDECOC Head & ECOC Transformer
 # ======================
+# Adapted from dlordinal: https://github.com/ayrna/dlordinal
+# Original authors: Bérchez‑Moreno, F.; Ayllón‑Gavilán, R.; Vargas, V. M.; 
+#                   Guijo‑Rubio, D.; Hervás‑Martínez, C.; Fernández, J. C.; Gutiérrez, P. A.
+# Modifications:
+#   - Modified forward method to return outputs from 2 heads.
+
+class OBDECOCHead(nn.Module):
+    """Ordinal Binary Decomposition (OBD) model with ECOC transformation.
+
+    Reference
+    ---------
+    Barbero et al., "Error-Correcting Output Codes for Ordinal Classification", 2023.
+    """
+
+    def __init__(
+        self, num_classes: int, base_classifier: nn.Module, base_n_outputs: int
+    ) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.base_classifier = base_classifier
+        self.obd_output = nn.Sequential(
+            OrderedDict(
+                [
+                    ("penultimate_activation", nn.ReLU()),
+                    ("last_linear", nn.Linear(base_n_outputs, num_classes - 1)),
+                    ("last_activation", nn.Sigmoid()),
+                ]
+            )
+        )
+        self.transformer = ECOCOutputTransformer(num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        encoded = self.base_classifier(x)
+        feat_output = self.base_classifier.extract_features(encoded)
+        logits = self.obd_output(encoded)
+        return feat_output, logits
+
+    def predict_from_inputs(self, x):
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input to the model
+
+        Returns
+        -------
+        An object with the following attributes.
+
+        scores : Tensor
+            The negative distance to each class ideal vector, to use
+            as class scores.
+        probas : Tensor
+            The predicted probability of belonging to each class :math:`P(y = q)`.
+        labels : Tensor
+            The predicted integer label according to the ECOC assignment
+            scheme.
+        """
+        raw_output = self(x)
+        return PredictOutput(
+            self.transformer.scores(raw_output),
+            self.transformer.probas(raw_output),
+            self.transformer.labels(raw_output),
+        )
+        
 class ECOCOutputTransformer(nn.Module):
     """A transformer for the output of the OBD model in order
     to apply the ECOC scheme.
@@ -241,71 +306,7 @@ class ECOCOutputTransformer(nn.Module):
         scores = self.scores(output)
         return scores.argmax(dim=1)
 
-
-
 PredictOutput = namedtuple("PredictOutput", ["scores", "probas", "labels"])
-
-
-# ======================
-#  OBDECOC Head
-# ======================
-class OBDECOCHead(nn.Module):
-    """Ordinal Binary Decomposition (OBD) model with ECOC transformation.
-
-    Reference
-    ---------
-    Barbero et al., "Error-Correcting Output Codes for Ordinal Classification", 2023.
-    """
-
-    def __init__(
-        self, num_classes: int, base_classifier: nn.Module, base_n_outputs: int
-    ) -> None:
-        super().__init__()
-        self.num_classes = num_classes
-        self.base_classifier = base_classifier
-        self.obd_output = nn.Sequential(
-            OrderedDict(
-                [
-                    ("penultimate_activation", nn.ReLU()),
-                    ("last_linear", nn.Linear(base_n_outputs, num_classes - 1)),
-                    ("last_activation", nn.Sigmoid()),
-                ]
-            )
-        )
-        self.transformer = ECOCOutputTransformer(num_classes)
-
-    def forward(self, x: Tensor) -> Tensor:
-        encoded = self.base_classifier(x)
-        feat_output = self.base_classifier.extract_features(encoded)
-        logits = self.obd_output(encoded)
-        return feat_output, logits
-
-    def predict_from_inputs(self, x):
-        """
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input to the model
-
-        Returns
-        -------
-        An object with the following attributes.
-
-        scores : Tensor
-            The negative distance to each class ideal vector, to use
-            as class scores.
-        probas : Tensor
-            The predicted probability of belonging to each class :math:`P(y = q)`.
-        labels : Tensor
-            The predicted integer label according to the ECOC assignment
-            scheme.
-        """
-        raw_output = self(x)
-        return PredictOutput(
-            self.transformer.scores(raw_output),
-            self.transformer.probas(raw_output),
-            self.transformer.labels(raw_output),
-        )
 
 
 # ======================
@@ -313,8 +314,6 @@ class OBDECOCHead(nn.Module):
 # ====================== 
 class MLP(nn.Module):
     def __init__(self, x_dim, h_dims=[128, 64], rep_dim=32):
-        # super(MLP, self).__init__()
-        # CHANGE:
         super().__init__()
         self.output_dim = rep_dim
 
@@ -366,19 +365,3 @@ class TabularNet(nn.Module):
         return clf_out
     
     
-    
-# ======================
-#  Example Usage
-# ======================
-if __name__ == "__main__":
-    x_dim = 32
-    n_classes = 4
-    enc_dims = [64, 32]
-    feat_dims = [16, 8]
-
-    base = BaseTabular(input_dim=x_dim, enc_dims=enc_dims, feat_dims=feat_dims)
-    model = OBDECOCHead(num_classes=n_classes, base_classifier=base, base_output_dim=enc_dims[-1])
-
-    sample = torch.randn(8, x_dim)
-    out = model(sample)
-    print({k: v.shape for k, v in out.items()})

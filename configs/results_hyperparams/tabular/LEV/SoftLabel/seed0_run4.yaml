@@ -1,0 +1,7 @@
+search_params:
+  distribution: exponential
+  eta: 0.8
+  p: 1.0
+  lr: 0.001
+best_value: 0.7073445490049064
+best_trial: 1

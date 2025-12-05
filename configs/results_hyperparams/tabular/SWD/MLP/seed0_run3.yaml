@@ -1,0 +1,6 @@
+search_params:
+  activation: tanh
+  alpha: 1.0348463617576241e-05
+  learning_rate_init: 0.0004204003353595159
+best_value: 0.5693555739667766
+best_trial: 12

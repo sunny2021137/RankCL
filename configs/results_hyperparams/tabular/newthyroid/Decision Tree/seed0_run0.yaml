@@ -1,0 +1,7 @@
+search_params:
+  max_depth: 15
+  min_samples_split: 3
+  min_samples_leaf: 2
+  criterion: entropy
+best_value: 0.9240817797941819
+best_trial: 9

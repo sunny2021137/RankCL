@@ -1,0 +1,6 @@
+search_params:
+  activation: relu
+  alpha: 0.0008529378793277735
+  learning_rate_init: 0.0037645223429875452
+best_value: 0.978872663832235
+best_trial: 14

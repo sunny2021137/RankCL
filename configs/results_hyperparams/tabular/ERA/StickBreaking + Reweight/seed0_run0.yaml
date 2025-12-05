@@ -1,0 +1,4 @@
+search_params:
+  lr: 0.001
+best_value: 0.48139900165868665
+best_trial: 8

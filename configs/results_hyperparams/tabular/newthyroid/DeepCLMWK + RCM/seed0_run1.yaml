@@ -1,0 +1,6 @@
+search_params:
+  link_function: probit
+  lr: 0.01
+  lambda: 1000
+best_value: 0.46912981966644446
+best_trial: 14

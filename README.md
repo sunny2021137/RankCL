@@ -5,20 +5,25 @@ RankCL is a framework for **contrastive learning with ordinal classification**, 
 
 ---
 
-<!-- ## Environment setup
+## Environment Setup
 
-### Option 1 (Conda):
+This project was developed and tested with **Python 3.11.9**.  
+All required packages are listed in `requirements.txt` or `environment.yml`.
+
+We recommend using **PyTorch 2.3.1 with CUDA 12.1** to reproduce the results reliably.
+
+### Option 1: Using Conda
 ```bash
 conda env create -f environment.yml
 conda activate rankcl_env
 ```
-### Option 2 (Pip):
 
+### Option 2: Using Pip
 ```bash
 pip install -r requirements.txt
 ```
---- -->
 
+---
 
 ## Dataset Setup
 
@@ -63,13 +68,12 @@ The dataset will be automatically loaded by our training scripts.
 
 ---
 ### Image Dataset
-Image dataset in this project follows the dataset preparation procedure used in the `dlordinal` package.  
-
----
-
-#### Adience Dataset
+Image dataset in this project follows the dataset preparation procedure used in the `dlordinal` package.
 
 Since the Adience dataset **cannot be downloaded automatically**, it must be prepared manually.
+
+
+#### Adience Dataset
 
 ##### 1. Create the directory structure
 
@@ -91,7 +95,187 @@ Download the following files from the official Adience dataset source and place 
 The dataset will be automatically loaded by our training scripts using the `dlordinal` package.
 No manual loading is required.
 
----
+## Baseline Setup
+
+This project uses a mix of official implementations and third-party re-implementations of baseline methods.
+For reproducibility, the exact repositories and commit versions used in our experiments are listed below.
+
+### Deep Ordinal Methods
+
+#### dlordinal
+
+All deep ordinal methods in this repository, except for CLOC, are implemented based on the **dlordinal** framework. (see `requirements.txt` for the exact version).
+
+- dlordinal GitHub repository: https://github.com/ayrna/dlordinal  
+
+However, for SoftLabel-based methods, the original implementation of `get_binomial_soft_labels` does not correctly generalize to arbitrary numbers of classes.
+
+To ensure correctness and full reproducibility, we provide a local re-implementation of the following components:
+
+- `get_binomial_soft_labels`
+- `BinomialCrossEntropyLoss` (functionality preserved with the dependency redirected to the local implementation)
+
+
+under:
+
+```bash
+overrides/softlabeling.py
+```
+
+All other components of `dlordinal` remain unchanged.
+
+
+#### CLOC
+
+```bash
+git clone https://github.com/dpitawela/CLOC.git
+cd CLOC
+git checkout bb59e65f40c1a51d0be058e6fc8e23dff6d9881c
+```
+
+
+### Conventional Baselines
+
+
+#### OrdinalTree
+
+The original authors of OrdinalTree did not publish official code.
+Therefore, we adopt a widely-used third-party implementation from the following repository:
+
+```bash
+git clone https://github.com/mosh98/Ordinal_Classifier.git
+cd Ordinal_Classifier
+git checkout e917b0c5780811c841894b8e62bfbc14ed975a13
+```
+
+#### CLM
+
+The CLM baseline denotes a linear cumulative link model (CLM) with a logistic link function implemented using `LogisticAT` from the `mord` library (see `requirements.txt` for the exact version).
+
+
+#### Classical Machine Learning Baselines
+
+The following classical machine learning baselines are implemented using widely-adopted open-source libraries. All implementations follow the official APIs of the corresponding libraries (see `requirements.txt` for the exact version).
+
+
+- **Decision Tree**  
+  Implemented using `DecisionTreeClassifier` from **scikit-learn**.
+
+- **Random Forest**  
+  Implemented using `RandomForestClassifier` from **scikit-learn**.
+
+- **Multi-Layer Perceptron (MLP)**  
+  Implemented using `MLPClassifier` from **scikit-learn**.
+
+- **Logistic Regression**  
+  Implemented using `LogisticRegression` from **scikit-learn**.
+
+- **XGBoost**  
+  Implemented using `XGBClassifier` from the **xgboost** library.
+
+- **LightGBM**  
+  Implemented using `LGBMClassifier` from the **lightgbm** library.
+
+
+
+## Usage
+
+This project uses **YAML configuration files** to manage datasets, model architectures, training hyperparameters, and RankCL-specific settings.
+- For reproducibility, seeds are fixed in the training scripts.
+
+All experiments in the paper can be reproduced by training the models from scratch. Training scripts automatically generate evaluation results upon completion.
+
+### Train & Evaluate
+
+```bash
+# Train RankCL and automatically generate evaluation results
+python main.py --config 'configs/main/<dataset_type>/<dataset>/<method>.yaml'
+```
+
+* Replace `<dataset_type>`, `<dataset>`, and `<method>` with your choices:
+
+  * For **image datasets** (e.g., FGNET, Adience), use `dataset_type=image`
+  * For **tabular datasets**, use `dataset_type=tabular`
+* Upon completion, evaluation metrics are automatically saved in `output/<dataset_type>/<dataset>/<method>/metrics.csv`. 
+
+#### Quickstart: train on a small tabular dataset
+
+```bash
+# Quickstart: train on a small tabular dataset (LEV)
+python main.py --config 'configs/main/tabular/LEV/OBDECOC + RCM.yaml'
+
+# After training, view evaluation results
+cat 'output/tabular/LEV/OBDECOC + RCM/metrics.csv'
+```
+
+### Config Structure
+
+Below is a example of a config file (`configs/default/default.yaml`):
+
+```yaml
+method_name: "OBDECOC + RCM"
+method_type: "RankCL"
+base_method_name: "OBDECOC"
+use_rankcl: true
+use_reweight: false
+out_dir: output
+best_hyperparams_dir: configs/results_hyperparams
+seed: 0
+num_workers: 0
+
+dataset:
+  dataset_name: "LEV"
+  dataset_type: "tabular"
+
+model:
+  model_params:
+    enc_dims: [128, 64]
+    feat_dims: [32, 16]
+
+train:
+  n_runs: 5
+  epochs: 400
+  batch_size: 128
+  weight_decay: 0
+  val_epoch: 1
+  patience: 50
+  best_metric_name: "QWK"
+  val_ratio: 0.15
+
+rankcl:
+  with_correct_penalty: true
+  similarity_metric: "cosine"
+
+```
+
+For full experiment settings, refer to the `configs/` directory.
+
+### Reproducibility
+
+We fix all random seeds to **0** in our experiments and enable deterministic behavior in PyTorch to improve reproducibility:
+
+```python
+import yaml
+import torch
+import numpy as np
+import random
+
+def set_seed(seed):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.use_deterministic_algorithms(True, warn_only=True)
+
+# Example usage:
+# set_seed(0)
+```
+
 
 ## Hyperparameter Tuning Ranges
 
@@ -155,159 +339,18 @@ The following table summarizes the hyperparameter search ranges used in our expe
 </details>
 
 
----
 
-## Environment Setup
+## Acknowledgements and Implementation Notes
 
-This project was developed and tested with Python 3.11.9 All required packages are listed in `requirements.txt`.  
-Supports both CPU and GPU (CUDA 12.1).
+To enable integration with the proposed two-head structure in our RankCL framework, we implemented a customized **OBDECOCHead** class adapted from the open-source library **dlordinal**, specifically based on its **OBDECOCModel and ECOCOutputTransformer**.
 
-### Option 1: Python virtual environment (venv) — Recommended
+- dlordinal GitHub repository: https://github.com/ayrna/dlordinal  
+- Original authors:  
+  Bérchez-Moreno, F.; Ayllón-Gavilán, R.; Vargas, V. M.; Guijo-Rubio, D.;  
+  Hervás-Martínez, C.; Fernández, J. C.; Gutiérrez, P. A.  
+- Copyright (c) 2024, The dlordinal developers.
 
-```bash
-# Create a virtual environment
-python -m venv rankcl_env
+This project fully follows the **BSD 3-Clause License** of the dlordinal project. We strictly respect and comply with all original license terms. All adapted components are properly credited. Any modifications are solely the responsibility of the authors of this repository.
 
-# Activate the environment
-# Linux/macOS
-source rankcl_env/bin/activate
-# Windows (PowerShell)
-.\rankcl_env\Scripts\activate
-
-# Upgrade pip
-pip install --upgrade pip
-
-# Install required packages
-pip install -r requirements.txt
-````
-
-> Note: `requirements.txt` specifies `torch==2.3.1+cu121` and `torchvision==0.18.1+cu121` for GPU.
-> If you do not have a GPU or prefer CPU-only versions:
->
-> ```bash
-> pip install torch==2.3.1+cpu torchvision==0.18.1+cpu
-> ```
-
-### Option 2: Conda environment (optional)
-
-```bash
-# Create a new conda environment
-conda create -n rankcl_env python=3.11 pip -y
-conda activate rankcl_env
-
-# Install required packages
-pip install -r requirements.txt
-```
-
-### Verify installation
-
-```bash
-python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-```
-
-Expected output for GPU:
-
-```
-2.3.1
-12.1
-```
-
-CPU-only versions will print `None` for CUDA.
-
----
-
-## Baseline Setup
-
-This project uses a mix of official implementations and third-party re-implementations of baseline methods.
-For reproducibility, the exact repositories and commit versions used in our experiments are listed below.
----
-
-### CLOC (Official Implementation)
-
-```bash
-git clone https://github.com/dpitawela/CLOC.git
-cd CLOC
-git checkout bb59e65f40c1a51d0be058e6fc8e23dff6d9881c
-```
-
----
-
-### OrdinalTree (Third-party Implementation)
-
-The original authors of OrdinalTree did not publish official code.
-Therefore, we adopt a widely-used third-party implementation from the following repository:
-
-```bash
-git clone https://github.com/mosh98/Ordinal_Classifier.git
-cd Ordinal_Classifier
-git checkout e917b0c5780811c841894b8e62bfbc14ed975a13
-```
-
----
-
-## Usage
-
-This project uses **YAML configuration files** to manage datasets, model architectures, training hyperparameters, and RankCL-specific settings.
-
-All experiments in the paper can be reproduced by training the models from scratch. Training scripts automatically produce evaluation results after the run.
-
----
-
-### Train & Evaluate
-
-```bash
-# Train RankCL and automatically generate evaluation results
-python scripts/main.py --config configs/<dataset_type>/<dataset>/<method>.yaml
-```
-
-* Replace `<dataset_type>`, `<dataset>`, and `<method>` with your choices:
-
-  * For **image datasets** (e.g., FGNET, Adience), use `dataset_type=image`
-  * For **tabular datasets**, use `dataset_type=tabular`
-* The training script runs for the number of epochs specified in the config file.
-* Upon completion, evaluation metrics are automatically saved in `output/<dataset_type>/<dataset>/<method>/metrics.csv`. 
-
----
-
-### Config Structure
-
-Below is a example of a config file (`configs/default.yaml`):
-
-```yaml
-method_name: "OBDECOC + RCM"
-base_method_name: "OBDECOC"
-use_rankcl: true
-use_reweight: false
-out_dir: output
-best_hyperparams_dir: configs/results_hyperparams
-seed: 0
-num_workers: 0
-
-dataset:
-  dataset_name: "LEV"
-  dataset_type: "tabular"
-
-model:
-  model_params:
-    enc_dims: [128, 64]
-    feat_dims: [32, 16]
-
-train:
-  n_runs: 5
-  epochs: 400
-  batch_size: 128
-  weight_decay: 0
-  val_epoch: 1
-  patience: 50
-  best_metric_name: "QWK"
-  val_ratio: 0.15
-
-rankcl:
-  with_correct_penalty: true
-  similarity_metric: "cosine"  # squaredL2
-
-```
-
-For full experiment settings, refer to the `configs/` directory.
-
----
+#### Modifications
+- The `forward` method has been modified to return **two-head outputs** for compatibility with the RankCL framework.

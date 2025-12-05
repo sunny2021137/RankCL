@@ -1,0 +1,6 @@
+search_params:
+  pretrain_lr: 0.001
+  lr: 0.001
+  lambda: 0.001
+best_value: 0.9538285173958799
+best_trial: 11

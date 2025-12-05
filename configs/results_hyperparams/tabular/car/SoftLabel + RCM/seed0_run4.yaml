@@ -1,0 +1,7 @@
+search_params:
+  distribution: beta
+  eta: 1.0
+  lr: 0.01
+  lambda: 0.1
+best_value: 0.9844554619875407
+best_trial: 12

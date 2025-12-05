@@ -1,0 +1,8 @@
+search_params:
+  clf: decision_tree
+  max_depth: 19
+  min_samples_split: 5
+  min_samples_leaf: 1
+  criterion: entropy
+best_value: 0.9623001932511185
+best_trial: 13

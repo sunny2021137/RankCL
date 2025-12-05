@@ -1,0 +1,8 @@
+search_params:
+  clf: random_forest
+  n_estimators: 295
+  max_depth: 20
+  min_samples_leaf: 9
+  max_features: log2
+best_value: 0.5425469165108824
+best_trial: 13

@@ -9,23 +9,18 @@ import numpy as np
 import pandas as pd
 
 def read_file(filename):
-	# Separator is automatically found
 	f = pd.read_csv(filename, header=None, engine='python', sep=None)
-	# print(f)
+	
 	inputs = f.iloc[:, :-1]
 	outputs = f.iloc[:, -1]
-
-	# inputs = f.values[:,0:(-1)]
-	# outputs = f.values[:,(-1)]
+ 
 	return inputs, outputs
 
 def load_dataset(dataset_path):
 	try:
-		# Creating dicts for all partitions (saving partition order as keys)
 		partition_list = {filename[filename.find('.') + 1:]: {} for filename
 																in os.listdir(dataset_path)
 																if filename.startswith("train_")}
-		# Loading each dataset
 		for filename in os.listdir(dataset_path):
 			if filename.startswith("train_"):
 				train_inputs, train_outputs = read_file(os.path.join(dataset_path, filename))
@@ -40,10 +35,9 @@ def load_dataset(dataset_path):
 	except KeyError:
 		raise RuntimeError("Found partition without train files: partition %s"
 							% filename[filename.find('.') + 1:])
-	# Saving partitions as a sorted list of (index, partition) tuples
 	partition_list = sorted(partition_list.items(), key=(lambda t: int(t[0])))
 	return partition_list
-# --------------------------------------
+
 
 def load_tabular_dataset(dataset_name):
     if dataset_name == 'abalone':

@@ -1,0 +1,5 @@
+search_params:
+  link_function: cloglog
+  lr: 0.01
+best_value: 0.9537321036506659
+best_trial: 11

@@ -1,0 +1,5 @@
+search_params:
+  lr: 0.001
+  lambda: 1000
+best_value: 0.9857210861000317
+best_trial: 5

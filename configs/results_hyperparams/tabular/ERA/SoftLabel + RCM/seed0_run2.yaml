@@ -1,0 +1,7 @@
+search_params:
+  distribution: binomial
+  eta: 0.8
+  lr: 0.001
+  lambda: 1000
+best_value: 0.53932541904776
+best_trial: 0

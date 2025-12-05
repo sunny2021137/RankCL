@@ -9,7 +9,7 @@ from dlordinal.losses import (
     ExponentialRegularisedCrossEntropyLoss,
     OrdinalECOCDistanceLoss
 )
-from dlordinal_change.softlabeling import (
+from overrides.softlabeling import (
     BinomialCrossEntropyLoss,
 )
 from sklearn.tree import DecisionTreeClassifier

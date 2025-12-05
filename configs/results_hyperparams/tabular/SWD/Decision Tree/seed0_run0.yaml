@@ -1,0 +1,7 @@
+search_params:
+  max_depth: 12
+  min_samples_split: 8
+  min_samples_leaf: 7
+  criterion: gini
+best_value: 0.5642941111689456
+best_trial: 0

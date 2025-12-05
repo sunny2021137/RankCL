@@ -1,0 +1,6 @@
+search_params:
+  link_function: cloglog
+  lr: 0.001
+  lambda: 10
+best_value: 0.3531700931182489
+best_trial: 11

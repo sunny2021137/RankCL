@@ -1,0 +1,8 @@
+search_params:
+  clf: decision_tree
+  max_depth: 15
+  min_samples_split: 9
+  min_samples_leaf: 9
+  criterion: gini
+best_value: 0.234959958046943
+best_trial: 3

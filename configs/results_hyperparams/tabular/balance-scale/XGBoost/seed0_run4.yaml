@@ -1,0 +1,6 @@
+search_params:
+  max_depth: 3
+  learning_rate: 0.2521847672458833
+  subsample: 0.6201759882005979
+best_value: 0.9321715303536822
+best_trial: 12

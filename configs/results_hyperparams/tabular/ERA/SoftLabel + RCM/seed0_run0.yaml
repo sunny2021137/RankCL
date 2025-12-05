@@ -1,0 +1,8 @@
+search_params:
+  distribution: triangular
+  alpha2: 0.1
+  eta: 1.0
+  lr: 0.01
+  lambda: 1000
+best_value: 0.5223350750644342
+best_trial: 9

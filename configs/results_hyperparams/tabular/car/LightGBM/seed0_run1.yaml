@@ -1,0 +1,6 @@
+search_params:
+  num_leaves: 96
+  learning_rate: 0.294023382979634
+  feature_fraction: 0.7169580654544496
+best_value: 0.9822488173040546
+best_trial: 13

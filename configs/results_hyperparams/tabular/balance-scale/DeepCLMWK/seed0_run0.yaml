@@ -1,0 +1,6 @@
+search_params:
+  link_function: logit
+  lr: 0.01
+  lambda: 1
+best_value: 0.9741832695108775
+best_trial: 13

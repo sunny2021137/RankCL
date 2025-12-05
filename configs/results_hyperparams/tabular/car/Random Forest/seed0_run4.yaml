@@ -1,0 +1,7 @@
+search_params:
+  n_estimators: 115
+  max_depth: 17
+  min_samples_leaf: 1
+  max_features: log2
+best_value: 0.9379833468400647
+best_trial: 10
