@@ -13,6 +13,7 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.benchmark = False  # 禁用動態算法選擇
         torch.backends.cudnn.deterministic = True  # 強制使用確定性算法
+        
     torch.use_deterministic_algorithms(True, warn_only=True)  # 確保 PyTorch 其他運算也使用確定性算法
         
 def load_yaml(path):

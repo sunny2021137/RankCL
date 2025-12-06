@@ -14,12 +14,14 @@ We recommend using **PyTorch 2.3.1 with CUDA 12.1** to reproduce the results rel
 
 ### Option 1: Using Conda
 ```bash
-conda env create -f environment.yml
+conda env create -f environment.yaml
 conda activate rankcl_env
 ```
 
 ### Option 2: Using Pip
 ```bash
+conda create -n rankcl_env python=3.11.9
+conda activate rankcl_env
 pip install -r requirements.txt
 ```
 
@@ -36,7 +38,7 @@ The datasets used in our experiments can be downloaded from the **official websi
 
 To prepare the datasets for this project, follow the steps below:
  
-1. Download the archive **`datasets-orreview.zip`** from the official website.
+1. Download the archive **`datasets-orreview.zip`** from the [**official website**](https://www.uco.es/grupos/ayrna/orreview).
 2. Place the downloaded file inside the `datasets/` directory.
 3. Extract the archive to obtain the following structure:
 
@@ -84,7 +86,7 @@ datasets
 ```
 ##### 2. Download the required files
 
-Download the following files from the official Adience dataset source and place them accordingly:
+Download the following files from the [official Adience dataset source](https://talhassner.github.io/home/projects/Adience/Adience-data.html) and place them accordingly:
 
 `fold_0_data.txt` … `fold_4_data.txt` → `datasets/adience/folds/`
 
@@ -97,8 +99,9 @@ No manual loading is required.
 
 ## Baseline Setup
 
-This project uses a mix of official implementations and third-party re-implementations of baseline methods.
-For reproducibility, the exact repositories and commit versions used in our experiments are listed below.
+This project uses a mix of official implementations and third-party re-implementations of baseline methods. 
+
+!!!補一下rankcl會和deepOrdinal結合
 
 ### Deep Ordinal Methods
 
@@ -189,7 +192,7 @@ All experiments in the paper can be reproduced by training the models from scrat
 
 ```bash
 # Train RankCL and automatically generate evaluation results
-python main.py --config 'configs/main/<dataset_type>/<dataset>/<method>.yaml'
+python main.py --config "configs/main/<dataset_type>/<dataset>/<method>.yaml"
 ```
 
 * Replace `<dataset_type>`, `<dataset>`, and `<method>` with your choices:
@@ -202,10 +205,10 @@ python main.py --config 'configs/main/<dataset_type>/<dataset>/<method>.yaml'
 
 ```bash
 # Quickstart: train on a small tabular dataset (LEV)
-python main.py --config 'configs/main/tabular/LEV/OBDECOC + RCM.yaml'
+python main.py --config "configs/main/tabular/LEV/OBDECOC + RCM.yaml"
 
 # After training, view evaluation results
-cat 'output/tabular/LEV/OBDECOC + RCM/metrics.csv'
+cat "output/tabular/LEV/OBDECOC + RCM/metrics.csv"
 ```
 
 ### Config Structure
@@ -244,7 +247,7 @@ train:
 
 rankcl:
   with_correct_penalty: true
-  similarity_metric: "cosine"
+  similarity_metric: "cosine"  # squaredL2
 
 ```
 

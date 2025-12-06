@@ -67,7 +67,7 @@ def run(base_cfg):
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RankCL Framework")
-    parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--config", type=str, default="configs/default/default.yaml")
     args = parser.parse_args()
 
     base_cfg = load_yaml(args.config)
