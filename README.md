@@ -101,19 +101,13 @@ No manual loading is required.
 
 This project uses a mix of official implementations and third-party re-implementations of baseline methods. 
 
-!!!補一下rankcl會和deepOrdinal結合
-
 ### Deep Ordinal Methods
 
 #### dlordinal
 
-All deep ordinal methods in this repository, except for CLOC, are implemented based on the **dlordinal** framework. (see `requirements.txt` for the exact version).
+All deep ordinal methods in this repository, except for CLOC, are implemented based on the [**dlordinal**](https://github.com/ayrna/dlordinal) framework (see `requirements.txt` for the exact version).
 
-- dlordinal GitHub repository: https://github.com/ayrna/dlordinal  
-
-However, for SoftLabel-based methods, the original implementation of `get_binomial_soft_labels` does not correctly generalize to arbitrary numbers of classes.
-
-To ensure correctness and full reproducibility, we provide a local re-implementation of the following components:
+However, for SoftLabel-based methods, the original implementation of `get_binomial_soft_labels` does not correctly generalize to arbitrary numbers of classes. To ensure correctness and full reproducibility, we provide a local re-implementation of the following components:
 
 - `get_binomial_soft_labels`
 - `BinomialCrossEntropyLoss` (functionality preserved with the dependency redirected to the local implementation)
