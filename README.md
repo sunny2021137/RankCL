@@ -296,7 +296,8 @@ The following table summarizes the hyperparameter search ranges used in our expe
 | | max_depth | [5, 20] |
 | | min_samples_leaf | [1, 10] |
 | | max_features | {sqrt, log2} |
-| **XGBoost** | max_depth | [3, 12] |
+| **XGBoost** | tree_method | hist |
+| | max_depth | [3, 12] |
 | | learning rate (lr) | [1e-3, 0.3] (log scale) |
 | | subsample | [0.6, 1.0] |
 | **LightGBM** | num_leaves | [16, 128] |
@@ -311,7 +312,7 @@ The following table summarizes the hyperparameter search ranges used in our expe
 | | multi_class | multinomial |
 | | max_iter | 400 |
 | | penalty | l2 |
-| **Ordinal Tree** | classifier | {decision_tree, random_forest} |
+| **Ordinal Tree** | classifier (clf) | {decision_tree, random_forest} |
 |  (decision_tree)| max_depth | [3, 20] |
 | | min_samples_split | [2, 10] |
 | | min_samples_leaf | [1, 10] |
@@ -322,17 +323,17 @@ The following table summarizes the hyperparameter search ranges used in our expe
 | | max_features | {sqrt, log2} |
 | **CLM** | alpha | [1e-3, 1e2] (log scale) |
 | **OBDECOC** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
-| **Deep CLM** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
+| **DeepCLM** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
 | | link_function | {logit, probit, cloglog} |
-| **Deep CLMWK** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
+| **DeepCLMWK** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
 | | link_function | {logit, probit, cloglog} |
 | **SoftLabel** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
 | | distribution | {triangular, beta, binomial, exponential} |
 | | alpha2 (triangular) | {0.01, 0.05, 0.10} |
-| | eta (non-triangular) | {0.8, 1.0} |
+| | eta | {0.8, 1.0} |
 | | p (exponential) | {1.0, 1.5, 2.0} |
 | **StickBreaking** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
-| **CLOR** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
+| **CLOC** | learning rate (lr) | {1e-4, 1e-3, 1e-2} |
 
 </details>
 

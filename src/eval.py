@@ -1,4 +1,7 @@
-# dl ordinal metrics
+# Adapted from dlordinal: https://github.com/ayrna/dlordinal
+# Original authors: Bérchez‑Moreno, F.; Ayllón‑Gavilán, R.; Vargas, V. M.; 
+#                   Guijo‑Rubio, D.; Hervás‑Martínez, C.; Fernández, J. C.; Gutiérrez, P. A.
+
 from sklearn.metrics import (
     accuracy_score,
     cohen_kappa_score,
