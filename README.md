@@ -280,7 +280,7 @@ def set_seed(seed):
 The following table summarizes the hyperparameter search ranges used in our experiments.
 
 <details>
-<summary><strong>Click to expand Table XVI</strong></summary>
+<summary><strong>Click to expand table</strong></summary>
 
 <br>
 
